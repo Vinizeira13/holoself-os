@@ -1,0 +1,98 @@
+/* HoloSelf OS — Global Styles
+   Transparent HUD aesthetic with Calm Technology principles.
+   No alarming colors. Soft glows. Minimal friction. */
+
+:root {
+  --holo-primary: rgba(120, 200, 255, 0.85);
+  --holo-secondary: rgba(180, 140, 255, 0.75);
+  --holo-accent: rgba(100, 255, 180, 0.8);
+  --holo-text: rgba(255, 255, 255, 0.92);
+  --holo-text-dim: rgba(255, 255, 255, 0.55);
+  --holo-bg: rgba(10, 12, 20, 0.35);
+  --holo-bg-solid: rgba(10, 12, 20, 0.65);
+  --holo-border: rgba(120, 200, 255, 0.15);
+  --holo-glow: 0 0 20px rgba(120, 200, 255, 0.15);
+  --holo-radius: 16px;
+  --holo-blur: 12px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: var(--holo-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  font-size: 13px;
+  user-select: none;
+}
+
+/* Drag region for frameless window */
+[data-tauri-drag-region] {
+  cursor: grab;
+}
+[data-tauri-drag-region]:active {
+  cursor: grabbing;
+}
+
+/* Scrollbar — minimal */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--holo-border);
+  border-radius: 2px;
+}
+
+/* Holographic card */
+.holo-card {
+  background: var(--holo-bg);
+  backdrop-filter: blur(var(--holo-blur));
+  -webkit-backdrop-filter: blur(var(--holo-blur));
+  border: 1px solid var(--holo-border);
+  border-radius: var(--holo-radius);
+  box-shadow: var(--holo-glow);
+  padding: 16px;
+  transition: all 0.3s ease;
+  user-select: text; /* Allow copying health data */
+}
+
+.holo-card:hover {
+  border-color: rgba(120, 200, 255, 0.3);
+  box-shadow: 0 0 30px rgba(120, 200, 255, 0.2);
+}
+
+/* Holographic text glow */
+.holo-glow {
+  text-shadow: 0 0 10px var(--holo-primary);
+}
+
+/* Pulse animation for active states */
+@keyframes holo-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.holo-pulse {
+  animation: holo-pulse 2s ease-in-out infinite;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
