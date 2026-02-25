@@ -46,6 +46,16 @@ pub fn run() {
             commands::agent::process_voice_input,
             // Gemini Bridge
             commands::gemini::ocr_clinical_pdf,
+            // Voice (Cartesia TTS)
+            commands::voice::speak,
+            commands::voice::speak_agent_message,
+            // Health Scheduler
+            commands::scheduler::get_exam_schedule,
+            commands::scheduler::save_scheduled_exam,
+            commands::scheduler::get_upcoming_exams,
+            // Vitamin D Calculator
+            commands::vitamin_d::get_vitamin_d_recommendation,
+            commands::vitamin_d::get_current_uv_index,
             // System
             commands::system::get_system_status,
         ])

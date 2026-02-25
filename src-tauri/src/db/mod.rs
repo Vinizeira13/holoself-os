@@ -179,4 +179,51 @@ impl Database {
         })?.collect::<Result<Vec<_>, _>>()?;
         Ok(entries)
     }
+
+    /// Get distinct supplement names taken in last 90 days
+    pub fn get_active_supplements(&self) -> SqlResult<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT name FROM supplements WHERE taken_at >= DATE('now', '-90 days') ORDER BY name"
+        )?;
+        let names = stmt.query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<String>, _>>()?;
+        Ok(names)
+    }
+
+    /// Get latest lab result date for each marker
+    pub fn get_latest_labs(&self) -> SqlResult<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT marker, MAX(test_date) FROM lab_results GROUP BY marker"
+        )?;
+        let labs = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?.collect::<Result<Vec<_>, _>>()?;
+        Ok(labs)
+    }
+
+    /// Insert a scheduled exam
+    pub fn insert_scheduled_exam(&self, exam: &crate::services::scheduler::ScheduledExam) -> SqlResult<i64> {
+        self.conn.execute(
+            "INSERT INTO health_schedule (exam_type, reason, scheduled_date, triggered_by) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![exam.exam_type, exam.reason, exam.scheduled_date, exam.triggered_by],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Get upcoming scheduled exams (not completed)
+    pub fn get_upcoming_exams(&self) -> SqlResult<Vec<(i64, String, String, String, bool)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, exam_type, reason, scheduled_date, completed FROM health_schedule WHERE completed = 0 ORDER BY scheduled_date ASC"
+        )?;
+        let exams = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, bool>(4)?,
+            ))
+        })?.collect::<Result<Vec<_>, _>>()?;
+        Ok(exams)
+    }
 }

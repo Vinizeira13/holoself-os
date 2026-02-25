@@ -62,6 +62,23 @@ export interface HealthScheduleEntry {
   completed: boolean;
 }
 
+export interface VitaminDRecommendation {
+  uv_index: number;
+  skin_type: number;
+  latitude: number;
+  optimal_minutes: number;
+  best_window: string;
+  d3_iu_supplement: number;
+  note: string;
+}
+
+export interface ScheduledExam {
+  exam_type: string;
+  reason: string;
+  scheduled_date: string;
+  triggered_by: string;
+}
+
 export interface SystemStatus {
   version: string;
   db_connected: boolean;
