@@ -14,7 +14,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // Initialize SQLite database
             let app_data = app.path().app_data_dir().expect("Failed to get app data dir");

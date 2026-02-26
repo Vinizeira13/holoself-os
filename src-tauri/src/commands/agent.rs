@@ -81,7 +81,7 @@ pub async fn get_agent_message(
     // 0. Check for recent voice input (last 30 seconds)
     let voice_input: Option<String> = db.query_row(
         "SELECT value FROM agent_memory WHERE key = 'voice_input' AND timestamp > datetime('now', '-30 seconds') ORDER BY rowid DESC LIMIT 1",
-        [],
+        &[],
         |row| row.get(0),
     ).ok();
 
@@ -306,13 +306,13 @@ pub async fn get_daily_stats(
     // Count today's supplement adherence
     let total_supplements: u32 = db.query_row(
         "SELECT COUNT(*) FROM supplements WHERE schedule_time IS NOT NULL",
-        [],
+        &[],
         |row| row.get(0),
     ).unwrap_or(0);
 
     let taken_today: u32 = db.query_row(
         "SELECT COUNT(*) FROM supplement_log WHERE date(taken_at) = date('now')",
-        [],
+        &[],
         |row| row.get(0),
     ).unwrap_or(0);
 
@@ -325,7 +325,7 @@ pub async fn get_daily_stats(
     // Voice commands today
     let voice_count: u32 = db.query_row(
         "SELECT COUNT(*) FROM agent_memory WHERE key = 'voice_input' AND date(timestamp) = date('now')",
-        [],
+        &[],
         |row| row.get(0),
     ).unwrap_or(0);
 
