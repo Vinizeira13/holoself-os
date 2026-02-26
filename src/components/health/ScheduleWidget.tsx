@@ -62,14 +62,14 @@ export function ScheduleWidget() {
   const visible = expanded ? exams : exams.slice(0, 3);
 
   return (
-    <div className="holo-card" style={{ padding: "10px 14px" }}>
+    <div className="holo-card">
       <div
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, cursor: "pointer", pointerEvents: "auto" }}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, cursor: "pointer", pointerEvents: "auto" }}
         onClick={() => setExpanded(!expanded)}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <IconCalendar size={10} />
-          <span className="holo-label">Exames</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+          <IconCalendar size={8} />
+          <span className="holo-label">EXAMES</span>
         </div>
         <span className="holo-label">{exams.length}</span>
       </div>
@@ -82,24 +82,19 @@ export function ScheduleWidget() {
           <div
             key={exam.id || i}
             style={{
-              padding: "6px 8px",
-              marginBottom: i < visible.length - 1 ? 4 : 0,
-              borderLeft: `2px solid ${urgentColor}`,
-              background: "rgba(var(--holo-primary-rgb), 0.02)",
-              borderRadius: "0 4px 4px 0",
+              padding: "3px 5px",
+              marginBottom: i < visible.length - 1 ? 2 : 0,
+              borderLeft: `1px solid ${urgentColor}`,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "var(--holo-text)", fontWeight: 500 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 9, color: "var(--holo-text)", fontWeight: 500 }}>
                 {labels[exam.exam_type] || exam.exam_type}
               </span>
-              <span style={{ fontSize: 9, color: urgentColor, fontFamily: "inherit" }}>
+              <span style={{ fontSize: 8, color: urgentColor }}>
                 {daysUntil > 0 ? `${daysUntil}d` : "Hoje"}
               </span>
             </div>
-            <p style={{ fontSize: 9, color: "var(--holo-text-muted)", marginTop: 1 }}>
-              {exam.reason}
-            </p>
           </div>
         );
       })}
@@ -108,10 +103,10 @@ export function ScheduleWidget() {
         <button
           onClick={() => setExpanded(true)}
           style={{
-            marginTop: 6, width: "100%", padding: "4px",
+            marginTop: 3, width: "100%", padding: "2px",
             background: "none", border: "none",
-            color: "var(--holo-text-dim)", fontSize: 9,
-            cursor: "pointer", letterSpacing: "0.06em",
+            color: "var(--holo-text-dim)", fontSize: 8,
+            cursor: "pointer",
           }}
         >
           +{exams.length - 3} mais

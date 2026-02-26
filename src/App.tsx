@@ -25,13 +25,6 @@ export default function App() {
   const setAutoSpeak = useAgentStore((s) => s.setAutoSpeak);
   const toast = useToastStore((s) => s.add);
 
-  // Detect Tauri env for transparent background
-  useEffect(() => {
-    if (typeof window.__TAURI__ !== "undefined") {
-      document.documentElement.classList.add("tauri-env");
-    }
-  }, []);
-
   useEffect(() => {
     fetchAgentMessage();
     const interval = setInterval(fetchAgentMessage, 15 * 60 * 1000);

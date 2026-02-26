@@ -54,45 +54,26 @@ export function VitaminDWidget() {
       : "var(--holo-accent)";
 
   return (
-    <div className="holo-card" style={{ padding: "10px 14px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span className="holo-label">Vitamina D</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <IconSun size={10} />
-          <span style={{ fontSize: 10, color: uvColor, fontWeight: 500 }}>UV {data.uv_index.toFixed(0)}</span>
+    <div className="holo-card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <span className="holo-label">VIT D</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+          <IconSun size={8} />
+          <span style={{ fontSize: 8, color: uvColor, fontWeight: 500 }}>UV {data.uv_index.toFixed(0)}</span>
         </div>
       </div>
-
-      {/* Metrics row */}
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
-        <div>
-          <span className="holo-metric holo-glow" style={{ color: uvColor, fontSize: 24 }}>
-            {data.optimal_minutes}
-          </span>
-          <span className="holo-label" style={{ display: "block", marginTop: 2 }}>min sol</span>
-        </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+        <span className="holo-metric holo-glow" style={{ color: uvColor }}>{data.optimal_minutes}</span>
+        <span className="holo-label">min</span>
         {data.d3_iu_supplement > 0 && (
-          <div>
-            <span style={{ fontSize: 16, fontWeight: 200, color: "var(--holo-text)" }}>
-              {data.d3_iu_supplement}
-            </span>
-            <span className="holo-label" style={{ display: "block", marginTop: 2 }}>IU/dia</span>
-          </div>
+          <>
+            <span style={{ fontSize: 12, fontWeight: 200 }}>{data.d3_iu_supplement}</span>
+            <span className="holo-label">IU</span>
+          </>
         )}
       </div>
-
-      {/* Time window */}
-      <div style={{
-        marginTop: 8,
-        padding: "4px 8px",
-        background: "rgba(var(--holo-primary-rgb), 0.04)",
-        borderRadius: 4,
-        borderLeft: `2px solid ${uvColor}`,
-      }}>
-        <span style={{ fontSize: 10, color: "var(--holo-text-dim)" }}>
-          {data.best_window}
-        </span>
+      <div style={{ marginTop: 4, fontSize: 8, color: "var(--holo-text-dim)", borderLeft: `1px solid ${uvColor}`, paddingLeft: 4 }}>
+        {data.best_window}
       </div>
     </div>
   );
