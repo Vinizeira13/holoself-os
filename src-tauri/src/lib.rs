@@ -49,6 +49,8 @@ pub fn run() {
             commands::voice::speak,
             commands::voice::speak_agent_message,
             commands::voice::process_voice_input,
+            commands::voice::process_voice_command,
+            commands::voice::save_temp_audio,
             commands::voice::get_whisper_status,
             // Health Scheduler
             commands::scheduler::get_exam_schedule,

@@ -51,6 +51,47 @@ pub async fn process_voice_input(
     .map_err(|e| format!("Task join error: {}", e))?
 }
 
+/// Save temporary audio data from frontend for Whisper processing
+#[tauri::command]
+pub async fn save_temp_audio(
+    audio_data: Vec<u8>,
+) -> Result<String, String> {
+    let temp_dir = std::env::temp_dir().join("holoself");
+    std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    let path = temp_dir.join(format!("voice_{}.webm", chrono::Utc::now().timestamp_millis()));
+    std::fs::write(&path, &audio_data).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Process voice command: transcribe + interpret via agent
+#[tauri::command]
+pub async fn process_voice_command(
+    audio_path: String,
+    state: State<'_, DbState>,
+) -> Result<String, String> {
+    // 1. Transcribe
+    let transcript = tokio::task::spawn_blocking(move || {
+        whisper::transcribe(&audio_path, Some("pt"))
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))??;
+
+    if transcript.trim().is_empty() {
+        return Ok("".to_string());
+    }
+
+    // 2. Store in agent memory
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    let _ = db.execute(
+        "INSERT INTO agent_memory (key, value, timestamp) VALUES ('voice_input', ?1, ?2)",
+        &[&transcript, &chrono::Utc::now().to_rfc3339()],
+    );
+
+    // 3. Return transcript (agent will process on frontend)
+    Ok(transcript)
+}
+
 /// Check whisper.cpp availability
 #[tauri::command]
 pub async fn get_whisper_status() -> Result<whisper::WhisperStatus, String> {

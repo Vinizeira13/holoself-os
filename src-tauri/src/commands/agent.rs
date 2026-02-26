@@ -75,6 +75,66 @@ pub async fn get_agent_message(
     let hour = now.hour();
     let today = now.format("%Y-%m-%d").to_string();
 
+    // Pre-fetch upcoming exams (used in multiple branches)
+    let upcoming_exams = db.get_upcoming_exams().unwrap_or_default();
+
+    // 0. Check for recent voice input (last 30 seconds)
+    let voice_input: Option<String> = db.query_row(
+        "SELECT value FROM agent_memory WHERE key = 'voice_input' AND timestamp > datetime('now', '-30 seconds') ORDER BY rowid DESC LIMIT 1",
+        [],
+        |row| row.get(0),
+    ).ok();
+
+    if let Some(ref input) = voice_input {
+        let lower = input.to_lowercase();
+        // Voice command processing
+        if lower.contains("status") || lower.contains("como estou") || lower.contains("relatório") {
+            return Ok(AgentMessage {
+                text: format!(
+                    "Relatório rápido: {} de {} suplementos hoje ({}%). {}",
+                    PROTOCOLS.iter().filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false)).count(),
+                    PROTOCOLS.len(),
+                    (PROTOCOLS.iter().filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false)).count() as f64 / PROTOCOLS.len() as f64 * 100.0) as u32,
+                    if !upcoming_exams.is_empty() {
+                        format!("Próximo exame: {} em {}.", upcoming_exams[0].1, upcoming_exams[0].3)
+                    } else {
+                        "Sem exames próximos.".to_string()
+                    }
+                ),
+                category: "voice_response".into(),
+                priority: "high".into(),
+                action: None,
+            });
+        } else if lower.contains("tomei") || lower.contains("registar") || lower.contains("suplemento") {
+            // Try to match a protocol
+            for protocol in PROTOCOLS {
+                if lower.contains(&protocol.name.to_lowercase()) {
+                    return Ok(AgentMessage {
+                        text: format!("Registando {} — {}.", protocol.name, protocol.dosage),
+                        category: "voice_response".into(),
+                        priority: "high".into(),
+                        action: Some(AgentAction {
+                            action_type: "log_supplement".into(),
+                            payload: serde_json::json!({
+                                "name": protocol.name,
+                                "dosage": protocol.dosage,
+                                "category": protocol.category
+                            }),
+                        }),
+                    });
+                }
+            }
+        }
+
+        // Generic voice acknowledgment
+        return Ok(AgentMessage {
+            text: format!("Entendido: \"{}\". A processar.", input),
+            category: "voice_response".into(),
+            priority: "medium".into(),
+            action: None,
+        });
+    }
+
     // 1. Check for pending supplements in current time window
     for protocol in PROTOCOLS {
         if protocol.hours.contains(&hour) {
@@ -107,10 +167,7 @@ pub async fn get_agent_message(
     let total = PROTOCOLS.len();
     let adherence_pct = (taken_today as f64 / total as f64 * 100.0) as u32;
 
-    // 3. Check for upcoming exams (returns Vec<(id, exam_type, reason, date, completed)>)
-    let upcoming_exams = db.get_upcoming_exams().unwrap_or_default();
-
-    // 4. Generate contextual insights based on time and state
+    // 3. Generate contextual insights based on time and state
     let message = if taken_today == total {
         // All supplements taken — give positive feedback
         AgentMessage {

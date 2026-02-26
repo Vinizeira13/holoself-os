@@ -8,8 +8,8 @@ import { SettingsPanel } from "./components/hud/SettingsPanel";
 import { ToastContainer, useToastStore } from "./components/hud/Toast";
 import { VitaminDWidget } from "./components/health/VitaminDWidget";
 import { ScheduleWidget } from "./components/health/ScheduleWidget";
-import { BlinkRateWidget } from "./components/health/BlinkRateWidget";
 import { WpmWidget } from "./components/health/WpmWidget";
+import { VoiceOrb } from "./components/hud/VoiceOrb";
 import { IconSettings, IconVolume, IconEye, IconEyeOff } from "./components/hud/Icons";
 import { JarvisHud } from "./components/hud/JarvisHud";
 import { useAgentStore } from "./stores/agentStore";
@@ -129,10 +129,10 @@ export default function App() {
         {showWidgets && (
           <div className="hud-panel-left">
             <div className="slide-in-left stagger-1">
-              <VitaminDWidget />
+              <VoiceOrb />
             </div>
             <div className="slide-in-left stagger-2">
-              <BlinkRateWidget />
+              <VitaminDWidget />
             </div>
             <div className="slide-in-left stagger-3">
               <WpmWidget />

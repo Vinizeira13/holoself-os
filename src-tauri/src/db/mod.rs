@@ -211,6 +211,19 @@ impl Database {
     }
 
     /// Get upcoming scheduled exams (not completed)
+    /// Execute a raw SQL statement
+    pub fn execute(&self, sql: &str, params: &[&dyn rusqlite::types::ToSql]) -> SqlResult<usize> {
+        self.conn.execute(sql, params)
+    }
+
+    /// Query a single row with raw SQL
+    pub fn query_row<T, F>(&self, sql: &str, params: &[&dyn rusqlite::types::ToSql], f: F) -> SqlResult<T>
+    where
+        F: FnOnce(&rusqlite::Row) -> SqlResult<T>,
+    {
+        self.conn.query_row(sql, params, f)
+    }
+
     pub fn get_upcoming_exams(&self) -> SqlResult<Vec<(i64, String, String, String, bool)>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, exam_type, reason, scheduled_date, completed FROM health_schedule WHERE completed = 0 ORDER BY scheduled_date ASC"

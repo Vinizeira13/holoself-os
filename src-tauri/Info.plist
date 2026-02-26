@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSCameraUsageDescription</key>
+    <string>HoloSelf OS uses the camera for blink rate detection and fatigue monitoring. All processing is 100% local.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>HoloSelf OS uses the microphone for voice commands via Whisper.cpp. All processing is 100% local.</string>
+</dict>
+</plist>
