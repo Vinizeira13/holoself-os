@@ -70,34 +70,39 @@ export function useHealthContext(
     const m = metricsRef.current;
     if (!m.isPresent) return; // Don't alert if user is away
 
-    // Rule 1: WPM declining + long focus → break
+    // Collect all matching alerts, fire the highest priority one
+    type AlertType = ProactiveAlert["type"];
+    const candidates: { type: AlertType; msg: string; priority: number }[] = [];
+
+    // Rule 1: WPM declining + long focus → break (priority 1 = highest)
     if (m.wpmTrend === "declining" && m.focusDurationMin > 90) {
-      fireAlert("break", "O teu WPM está a cair e estás focado há +90min. Faz uma pausa de 5min.", 1);
-      return;
+      candidates.push({ type: "break", msg: "O teu WPM está a cair e estás focado há +90min. Faz uma pausa de 5min.", priority: 1 });
     }
 
     // Rule 2: Bad posture > ongoing
     if (m.postureScore < 50) {
-      fireAlert("posture", "Postura baixa detectada. Endireita as costas e faz o 20-20-20.", 1);
-      return;
+      candidates.push({ type: "posture", msg: "Postura baixa detectada. Endireita as costas e faz o 20-20-20.", priority: 1 });
     }
 
     // Rule 3: Deep focus + no breaks
     if (m.focusDurationMin > 120 && m.breaksTaken === 0) {
-      fireAlert("hydrate", "Deep focus há 2h+ sem pausa. Hidrata e movimenta.", 2);
-      return;
+      candidates.push({ type: "hydrate", msg: "Deep focus há 2h+ sem pausa. Hidrata e movimenta.", priority: 2 });
     }
 
     // Rule 4: 60min+ focus → eye care
     if (m.focusDurationMin > 60 && m.focusDurationMin % 60 < 6) {
-      fireAlert("eyecare", "1h+ de foco. 20-20-20: olha para algo a 6m por 20s.", 3);
-      return;
+      candidates.push({ type: "eyecare", msg: "1h+ de foco. 20-20-20: olha para algo a 6m por 20s.", priority: 3 });
     }
 
     // Rule 5: Moderate focus reminder
     if (m.focusDurationMin > 45 && m.postureScore < 70) {
-      fireAlert("posture", "Postura a deteriorar. Ajusta e continua forte.", 2);
-      return;
+      candidates.push({ type: "posture", msg: "Postura a deteriorar. Ajusta e continua forte.", priority: 2 });
+    }
+
+    // Fire highest priority alert (lowest number = highest priority)
+    if (candidates.length > 0) {
+      const best = candidates.sort((a, b) => a.priority - b.priority)[0];
+      fireAlert(best.type, best.msg, best.priority);
     }
   }, [fireAlert]);
 

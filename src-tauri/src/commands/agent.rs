@@ -302,10 +302,8 @@ async fn call_gemini_agent(
 
     let client = reqwest::Client::new();
     let response = client
-        .post(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
-            api_key
-        ))
+        .post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
+        .header("x-goog-api-key", api_key)
         .json(&serde_json::json!({
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
@@ -313,7 +311,7 @@ async fn call_gemini_agent(
                 "temperature": 0.7,
             }
         }))
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
         .map_err(|e| format!("Gemini request failed: {}", e))?;
@@ -403,13 +401,13 @@ pub async fn get_daily_stats(
 
     // Count today's supplement adherence
     let total_supplements: u32 = db.query_row(
-        "SELECT COUNT(*) FROM supplements WHERE schedule_time IS NOT NULL",
+        "SELECT COUNT(*) FROM supplements",
         &[],
         |row| row.get(0),
     ).unwrap_or(0);
 
     let taken_today: u32 = db.query_row(
-        "SELECT COUNT(*) FROM supplement_log WHERE date(taken_at) = date('now')",
+        "SELECT COUNT(*) FROM supplements WHERE DATE(taken_at) = DATE('now')",
         &[],
         |row| row.get(0),
     ).unwrap_or(0);

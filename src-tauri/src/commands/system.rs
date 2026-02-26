@@ -14,13 +14,14 @@ pub struct SystemStatus {
 #[tauri::command]
 pub async fn get_system_status() -> Result<SystemStatus, String> {
     let gemini_configured = std::env::var("GEMINI_API_KEY").is_ok();
+    let tz = chrono::Local::now().format("%Z").to_string();
 
     Ok(SystemStatus {
         version: env!("CARGO_PKG_VERSION").to_string(),
         db_connected: true, // If we got here, DB is connected
         gemini_configured,
         voice_available: false, // TODO: Check whisper.cpp availability
-        timezone: "WET".to_string(),
+        timezone: tz,
         uptime_seconds: 0, // TODO: Track uptime
     })
 }

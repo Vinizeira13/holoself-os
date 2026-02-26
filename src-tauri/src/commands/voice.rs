@@ -85,7 +85,7 @@ pub async fn process_voice_command(
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let _ = db.execute(
         "INSERT INTO agent_memory (key, value, timestamp) VALUES ('voice_input', ?1, ?2)",
-        &[&transcript, &chrono::Utc::now().to_rfc3339()],
+        rusqlite::params![&transcript, &chrono::Utc::now().to_rfc3339()],
     );
 
     // 3. Return transcript (agent will process on frontend)

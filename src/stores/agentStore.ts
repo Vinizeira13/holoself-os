@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import type { AgentMessage } from "../types/health";
 
+// Singleton AudioContext — reused across all TTS calls
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext {
+  if (!_audioCtx || _audioCtx.state === "closed") {
+    _audioCtx = new AudioContext();
+  }
+  return _audioCtx;
+}
+
 interface AgentState {
   message: AgentMessage | null;
   isLoading: boolean;
@@ -58,7 +67,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       if (typeof window.__TAURI__ !== "undefined") {
         const { invoke } = await import("@tauri-apps/api/core");
         const audioBytes = await invoke<number[]>("speak_agent_message");
-        const audioCtx = new AudioContext();
+        const audioCtx = getAudioCtx();
+        if (audioCtx.state === "suspended") await audioCtx.resume();
         const buffer = new Uint8Array(audioBytes).buffer;
         const audioBuffer = await audioCtx.decodeAudioData(buffer);
         const source = audioCtx.createBufferSource();

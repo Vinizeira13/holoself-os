@@ -118,7 +118,7 @@ pub fn transcribe(audio_path: &str, language: Option<&str>) -> Result<String> {
         bail!("Audio file not found: {}", audio_path);
     }
 
-    // Run whisper.cpp CLI
+    // Run whisper.cpp CLI (optimized for Apple Silicon)
     let output = Command::new(&binary)
         .arg("-m").arg(&model)
         .arg("-f").arg(&audio)
@@ -126,6 +126,8 @@ pub fn transcribe(audio_path: &str, language: Option<&str>) -> Result<String> {
         .arg("--no-timestamps")
         .arg("-nt")         // No timestamps in output
         .arg("-np")         // No progress
+        .arg("-t").arg("4") // Use 4 threads (Apple Silicon optimized)
+        .arg("--translate").arg("false") // Never translate, keep original language
         .output()
         .with_context(|| format!("Failed to run whisper.cpp at {:?}", binary))?;
 

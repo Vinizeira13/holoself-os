@@ -94,10 +94,8 @@ Only return valid JSON, no markdown."#;
     });
 
     let response = client
-        .post(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
-            api_key
-        ))
+        .post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
+        .header("x-goog-api-key", &api_key)
         .json(&body)
         .send()
         .await

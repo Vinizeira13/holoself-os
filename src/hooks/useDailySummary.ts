@@ -90,12 +90,19 @@ export function useDailySummary(options: DailySummaryOptions) {
     return parts.join(" ");
   }, []);
 
+  const lastFiredDateRef = useRef<string>("");
+
   const checkTime = useCallback(async () => {
     if (!enabled || firedTodayRef.current) return;
 
     const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
     if (now.getHours() === targetHour && now.getMinutes() < 5) {
+      // Prevent multiple fires on same day
+      if (lastFiredDateRef.current === todayStr) return;
       firedTodayRef.current = true;
+      lastFiredDateRef.current = todayStr;
 
       const stats = await fetchStats();
       if (stats) {

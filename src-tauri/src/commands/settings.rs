@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tauri::Manager;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
@@ -22,25 +23,26 @@ impl Default for AppSettings {
             skin_type: 4,
             latitude: 38.7223,
             longitude: -9.1393,
-            timezone: "WET".to_string(),
+            timezone: chrono::Local::now().format("%Z").to_string(),
             sleep_anchor_hour: 2,
         }
     }
 }
 
-fn settings_path() -> Result<PathBuf, String> {
-    let config_dir = dirs::config_dir()
-        .ok_or("Cannot determine config directory")?;
-    let app_dir = config_dir.join("com.holoself.os");
-    std::fs::create_dir_all(&app_dir)
+fn settings_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let config_dir = app_handle
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&config_dir)
         .map_err(|e| format!("Failed to create config dir: {}", e))?;
-    Ok(app_dir.join("settings.json"))
+    Ok(config_dir.join("settings.json"))
 }
 
 /// Load settings from disk, or return defaults
 #[tauri::command]
-pub async fn get_settings() -> Result<AppSettings, String> {
-    let path = settings_path()?;
+pub async fn get_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, String> {
+    let path = settings_path(&app_handle)?;
 
     if path.exists() {
         let data = std::fs::read_to_string(&path)
@@ -72,8 +74,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
 
 /// Save settings to disk
 #[tauri::command]
-pub async fn save_settings(settings: AppSettings) -> Result<(), String> {
-    let path = settings_path()?;
+pub async fn save_settings(settings: AppSettings, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let path = settings_path(&app_handle)?;
     let data = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
     std::fs::write(&path, data)

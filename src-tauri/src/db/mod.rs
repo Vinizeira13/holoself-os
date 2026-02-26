@@ -39,6 +39,12 @@ impl Database {
 
         // Future: if current_version < 2 { self.apply_v2()?; }
 
+        // Cleanup old agent_memory entries (>30 days)
+        let _ = self.conn.execute(
+            "DELETE FROM agent_memory WHERE timestamp < datetime('now', '-30 days')",
+            [],
+        );
+
         Ok(())
     }
 
@@ -107,6 +113,7 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_vitals_recorded_at ON vitals(recorded_at);
             CREATE INDEX IF NOT EXISTS idx_lab_results_marker ON lab_results(marker);
             CREATE INDEX IF NOT EXISTS idx_health_schedule_date ON health_schedule(scheduled_date);
+            CREATE INDEX IF NOT EXISTS idx_agent_memory_key ON agent_memory(key, timestamp);
 
             -- Record migration
             INSERT INTO _migrations (version) VALUES (1);

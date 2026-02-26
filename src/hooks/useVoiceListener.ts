@@ -37,6 +37,10 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
     onTimeout,
   } = options;
 
+  // Store callbacks in refs to avoid stale closures in processAudioChunk
+  const onTranscriptRef = useRef(onTranscript);
+  onTranscriptRef.current = onTranscript;
+
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<VoiceListenerState>({
@@ -142,7 +146,7 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
         if (transcript && transcript.trim().length > 0) {
           const text = transcript.trim();
           setState(s => ({ ...s, lastTranscript: text, isProcessing: false }));
-          onTranscript(text);
+          onTranscriptRef.current(text);
         } else {
           setState(s => ({ ...s, isProcessing: false }));
         }
@@ -154,7 +158,7 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
         error: err instanceof Error ? err.message : String(err),
       }));
     }
-  }, [onTranscript]);
+  }, []); // onTranscript via ref — no stale closure
 
   const start = useCallback(async () => {
     if (streamRef.current) return;

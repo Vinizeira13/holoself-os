@@ -75,21 +75,6 @@ pub async fn save_api_keys(
 
     std::fs::write(&env_path, &env_content).map_err(|e| e.to_string())?;
 
-    // Also write to src-tauri/.env for dev mode
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(parent) = exe_path.parent() {
-            // Try to find src-tauri dir
-            let dev_env = parent
-                .ancestors()
-                .find(|p| p.join("src-tauri").exists())
-                .map(|p| p.join("src-tauri/.env"));
-
-            if let Some(dev_path) = dev_env {
-                let _ = std::fs::write(&dev_path, &env_content);
-            }
-        }
-    }
-
     Ok(())
 }
 
