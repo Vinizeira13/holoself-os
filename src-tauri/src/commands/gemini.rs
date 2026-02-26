@@ -103,7 +103,9 @@ Only return valid JSON, no markdown."#;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_body = response.text().await.unwrap_or_default();
+        let error_body = response.text().await
+            .unwrap_or_else(|_| "<unable to read error body>".to_string());
+        log::error!("Gemini API error {}: {}", status, error_body);
         return Err(format!("Gemini API error {}: {}", status, error_body));
     }
 

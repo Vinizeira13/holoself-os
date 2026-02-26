@@ -17,13 +17,18 @@ interface ToastStore {
 
 let nextId = 0;
 
+const MAX_TOASTS = 5;
+
 export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   add: (message, type = "info") => {
     const id = nextId++;
-    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
-    // Auto-remove after 4s
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4000);
+    set((s) => ({
+      // Limit max toasts to prevent spam
+      toasts: [...s.toasts, { id, message, type }].slice(-MAX_TOASTS),
+    }));
+    // Auto-remove after 4.2s (component fades at 3.5s + 700ms buffer for animation)
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4200);
   },
   remove: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

@@ -53,7 +53,7 @@ export function useConversationMode(options: ConversationOptions) {
 
     const userTurn: ConversationTurn = { role: "user", text, timestamp: Date.now() };
     turnsRef.current = [...turnsRef.current, userTurn];
-    setTurns([...turnsRef.current]);
+    setTurns(turnsRef.current);
 
     // Check max turns
     if (turnsRef.current.length >= maxTurns * 2) {
@@ -68,7 +68,7 @@ export function useConversationMode(options: ConversationOptions) {
 
       const agentTurn: ConversationTurn = { role: "agent", text: response, timestamp: Date.now() };
       turnsRef.current = [...turnsRef.current, agentTurn];
-      setTurns([...turnsRef.current]);
+      setTurns(turnsRef.current);
 
       setState("speaking");
 

@@ -28,22 +28,24 @@ async function processSpeechQueue() {
 }
 
 /** Play audio bytes through the singleton AudioContext. Returns a promise that resolves when playback ends. */
-function playAudioBytes(audioBytes: number[]): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const audioCtx = getAudioCtx();
-      if (audioCtx.state === "suspended") await audioCtx.resume();
-      const buffer = new Uint8Array(audioBytes).buffer;
-      const audioBuffer = await audioCtx.decodeAudioData(buffer);
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioCtx.destination);
+async function playAudioBytes(audioBytes: number[]): Promise<void> {
+  const audioCtx = getAudioCtx();
+  try {
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    const buffer = new Uint8Array(audioBytes).buffer;
+    const audioBuffer = await audioCtx.decodeAudioData(buffer);
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioCtx.destination);
+    await new Promise<void>((resolve) => {
       source.onended = () => resolve();
       source.start();
-    } catch (err) {
-      reject(err);
-    }
-  });
+    });
+  } catch (err) {
+    // Reset audio context on decode/playback failure to avoid stuck state
+    try { _audioCtx = null; audioCtx.close(); } catch { /* ignore close errors */ }
+    console.warn("[HoloSelf] Audio playback error:", err);
+  }
 }
 
 /** Queue a text-to-speech request. Prevents overlapping. */
@@ -61,7 +63,7 @@ interface AgentState {
   isSpeaking: boolean;
   error: string | null;
   autoSpeak: boolean;
-  lastSpokenText: string | null;
+  lastSpokenId: number;
   fetchMessage: () => Promise<void>;
   clearMessage: () => void;
   setAutoSpeak: (v: boolean) => void;
@@ -76,7 +78,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   isSpeaking: false,
   error: null,
   autoSpeak: true,
-  lastSpokenText: null,
+  lastSpokenId: 0,
 
   fetchMessage: async () => {
     set({ isLoading: true, error: null });
@@ -90,11 +92,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       const { invoke } = await import("@tauri-apps/api/core");
       const message = await invoke<AgentMessage>("get_agent_message");
-      const prev = get().lastSpokenText;
+      const msgId = Date.now(); // Unique ID per fetch
       set({ message, isLoading: false });
 
-      // Auto-speak if enabled and message is new
-      if (get().autoSpeak && message.text !== prev) {
+      // Auto-speak if enabled and message is new (prevents duplicate speaks)
+      if (get().autoSpeak && msgId > get().lastSpokenId) {
+        set({ lastSpokenId: msgId });
         get().speakCurrent();
       }
     } catch (err) {
@@ -113,8 +116,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const msg = get().message;
     if (!msg) return;
     if (typeof window.__TAURI__ === "undefined") return;
-
-    set({ lastSpokenText: msg.text });
 
     queueSpeak(async () => {
       set({ isSpeaking: true });

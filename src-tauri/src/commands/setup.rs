@@ -349,7 +349,9 @@ fn download_whisper_binary(target: &PathBuf) -> Result<(), String> {
         format!("https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-v1.7.5-bin-macos-{}.zip", arch),
     ];
 
-    let tmp_zip = target.parent().unwrap().join("whisper-cli.zip");
+    let tmp_zip = target.parent()
+        .ok_or("Caminho de instalação inválido")?
+        .join("whisper-cli.zip");
 
     let mut downloaded = false;
     for url in &urls {
@@ -383,7 +385,9 @@ fn download_whisper_binary(target: &PathBuf) -> Result<(), String> {
 fn download_ffmpeg_binary(target: &PathBuf) -> Result<(), String> {
     log::info!("Downloading static ffmpeg binary...");
 
-    let tmp_zip = target.parent().unwrap().join("ffmpeg.zip");
+    let tmp_zip = target.parent()
+        .ok_or("Caminho de instalação inválido")?
+        .join("ffmpeg.zip");
 
     // evermeet.cx hosts reliable macOS static builds
     let url = "https://evermeet.cx/ffmpeg/getrelease/zip";
@@ -407,7 +411,9 @@ fn download_ffmpeg_binary(target: &PathBuf) -> Result<(), String> {
 
 /// Extract a named binary from a zip file into target path
 fn extract_binary_from_zip(zip_path: &PathBuf, target: &PathBuf, names: &[&str]) -> Result<(), String> {
-    let unzip_dir = target.parent().unwrap().join("_unzip_tmp");
+    let unzip_dir = target.parent()
+        .ok_or("Caminho de descompactação inválido")?
+        .join("_unzip_tmp");
     let _ = std::fs::remove_dir_all(&unzip_dir);
 
     let unzip = Command::new("unzip")

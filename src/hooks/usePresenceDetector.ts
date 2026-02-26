@@ -150,6 +150,12 @@ export function usePresenceDetector(options: PresenceOptions = {}): PresenceStat
       // Start analysis loop
       intervalRef.current = setInterval(analyzeFrame, checkIntervalMs);
     } catch {
+      // Cleanup any partially-acquired resources
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
       setState(s => ({ ...s, cameraAvailable: false }));
     }
   }, [analyzeFrame, checkIntervalMs]);

@@ -19,11 +19,11 @@ export function useGlobalHotkey(callback: () => void) {
 
   useEffect(() => {
     let unregister: (() => void) | null = null;
+    let usingBrowserFallback = false;
 
     const setup = async () => {
       if (typeof window.__TAURI__ !== "undefined") {
         try {
-          // Tauri v2 global shortcut plugin
           const { register } = await import("@tauri-apps/plugin-global-shortcut");
           await register("CommandOrControl+Shift+H", () => {
             callbackRef.current();
@@ -35,16 +35,21 @@ export function useGlobalHotkey(callback: () => void) {
         } catch {
           // Plugin not available, fall back to browser events
           window.addEventListener("keydown", handleKeyDown);
+          usingBrowserFallback = true;
         }
       } else {
         window.addEventListener("keydown", handleKeyDown);
+        usingBrowserFallback = true;
       }
     };
 
     setup();
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      // Always clean up browser listener if it was added
+      if (usingBrowserFallback) {
+        window.removeEventListener("keydown", handleKeyDown);
+      }
       if (unregister) unregister();
     };
   }, [handleKeyDown]);

@@ -21,6 +21,22 @@ pub fn run() {
             if let Ok(config_dir) = app.path().app_config_dir() {
                 let env_path = config_dir.join(".env");
                 if env_path.exists() {
+                    // Secure .env permissions on Unix (0600 = owner-only)
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        if let Ok(meta) = std::fs::metadata(&env_path) {
+                            let mode = meta.permissions().mode();
+                            if mode & 0o077 != 0 {
+                                // Fix permissions automatically
+                                let _ = std::fs::set_permissions(
+                                    &env_path,
+                                    std::fs::Permissions::from_mode(0o600),
+                                );
+                                log::warn!("Fixed insecure .env permissions (was {:o})", mode);
+                            }
+                        }
+                    }
                     if let Ok(content) = std::fs::read_to_string(&env_path) {
                         for line in content.lines() {
                             let line = line.trim();

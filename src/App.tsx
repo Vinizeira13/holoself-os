@@ -169,6 +169,9 @@ export default function App() {
       toast("Relatório diário pronto!", "info");
       // Speak through global queue (prevents overlapping)
       speakText(summary);
+      // Reset daily counters
+      breakCountRef.current = 0;
+      focusStartRef.current = Date.now();
     },
   });
 
@@ -188,7 +191,9 @@ export default function App() {
     try {
       if (typeof window.__TAURI__ !== "undefined") {
         const { invoke } = await import("@tauri-apps/api/core");
-        const result = await invoke<OcrResult>("ocr_clinical_pdf", { filePath: pdf.name });
+        // Sanitize filename to prevent path traversal
+        const safeName = pdf.name.replace(/\.\.\//g, "").replace(/[^a-zA-Z0-9._\-\s]/g, "_");
+        const result = await invoke<OcrResult>("ocr_clinical_pdf", { filePath: safeName });
         toast(`${result.markers.length} marcadores extraídos`, "success");
       } else {
         toast("OCR disponível apenas no Tauri", "info");
@@ -240,7 +245,7 @@ export default function App() {
       onDrop={handleDrop}
     >
       {/* 3D Avatar — full background */}
-      <ErrorBoundary>
+      <ErrorBoundary fallback={<div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center, #0a0e14 0%, #000508 100%)" }} />}>
         <Canvas
           style={{ position: "absolute", inset: 0, background: "transparent" }}
           gl={{ alpha: true, antialias: true, preserveDrawingBuffer: false }}

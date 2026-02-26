@@ -40,10 +40,12 @@ impl Database {
         // Future: if current_version < 2 { self.apply_v2()?; }
 
         // Cleanup old agent_memory entries (>30 days)
-        let _ = self.conn.execute(
+        if let Err(e) = self.conn.execute(
             "DELETE FROM agent_memory WHERE timestamp < datetime('now', '-30 days')",
             [],
-        );
+        ) {
+            log::warn!("Failed to cleanup old agent_memory: {}", e);
+        }
 
         Ok(())
     }
