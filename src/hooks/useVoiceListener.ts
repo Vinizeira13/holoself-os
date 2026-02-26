@@ -98,7 +98,7 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
       // Silence detected while was speaking
       if (!silenceTimerRef.current) {
         silenceTimerRef.current = setTimeout(() => {
-          const speechDuration = now - speechStartRef.current;
+          const speechDuration = Date.now() - speechStartRef.current;
           isSpeakingRef.current = false;
           setState(s => ({ ...s, isSpeaking: false }));
 

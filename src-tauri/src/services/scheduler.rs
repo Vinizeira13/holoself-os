@@ -150,6 +150,7 @@ pub fn generate_exam_schedule(
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SupplementInfo {
     pub name: String,
     pub started_date: String,

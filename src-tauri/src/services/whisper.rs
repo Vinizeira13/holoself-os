@@ -142,6 +142,7 @@ pub fn transcribe(audio_path: &str, language: Option<&str>) -> Result<String> {
 }
 
 /// Check if whisper.cpp is available
+#[allow(dead_code)]
 pub fn is_available() -> bool {
     find_whisper_binary().is_ok() && find_model().is_ok()
 }

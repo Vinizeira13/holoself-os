@@ -114,9 +114,15 @@ Only return valid JSON, no markdown."#;
         .await
         .map_err(|e| format!("Failed to parse Gemini response: {}", e))?;
 
-    let text = gemini_response["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str()
-        .ok_or("No text in Gemini response")?;
+    let text = gemini_response
+        .get("candidates")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("content"))
+        .and_then(|c| c.get("parts"))
+        .and_then(|p| p.get(0))
+        .and_then(|p| p.get("text"))
+        .and_then(|t| t.as_str())
+        .ok_or("Invalid Gemini response: missing candidates or text")?;
 
     // Clean potential markdown code fences from Gemini response
     let cleaned = text

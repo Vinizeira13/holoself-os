@@ -167,9 +167,51 @@ pub async fn get_agent_message(
     let total = PROTOCOLS.len();
     let adherence_pct = (taken_today as f64 / total as f64 * 100.0) as u32;
 
-    // 3. Generate contextual insights based on time and state
+    // 3. Build context for Gemini (or fallback to hardcoded)
+    let supplement_names: Vec<&str> = PROTOCOLS.iter().map(|p| p.name).collect();
+    let taken_names: Vec<&str> = PROTOCOLS.iter()
+        .filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false))
+        .map(|p| p.name)
+        .collect();
+    let pending_names: Vec<&str> = PROTOCOLS.iter()
+        .filter(|p| !db.check_supplement_taken(p.name, &today).unwrap_or(false))
+        .map(|p| p.name)
+        .collect();
+
+    let exam_context = if !upcoming_exams.is_empty() {
+        format!("Próximo exame: {} em {}.", upcoming_exams[0].1, upcoming_exams[0].3)
+    } else {
+        "Sem exames próximos.".to_string()
+    };
+
+    // Drop the db lock before the async Gemini call
+    drop(db);
+
+    // Try Gemini for intelligent response, fallback to templates
+    let gemini_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+    if !gemini_key.is_empty() && gemini_key != "your_gemini_api_key_here" {
+        match call_gemini_agent(
+            &gemini_key, hour, adherence_pct,
+            &taken_names, &pending_names, &supplement_names,
+            &exam_context,
+        ).await {
+            Ok(text) => {
+                return Ok(AgentMessage {
+                    text,
+                    category: if adherence_pct == 100 { "health_insight" } else { "calm_nudge" }.into(),
+                    priority: "low".into(),
+                    action: None,
+                });
+            }
+            Err(e) => {
+                log::warn!("Gemini agent call failed, using fallback: {}", e);
+                // Fall through to hardcoded
+            }
+        }
+    }
+
+    // Fallback: hardcoded contextual messages
     let message = if taken_today == total {
-        // All supplements taken — give positive feedback
         AgentMessage {
             text: format!(
                 "Protocolo 100% hoje. {} de {} suplementos registados. Sistema em carga total.",
@@ -179,45 +221,22 @@ pub async fn get_agent_message(
             priority: "low".into(),
             action: None,
         }
-    } else if !upcoming_exams.is_empty() {
-        // Has upcoming exams
-        let next = &upcoming_exams[0];
-        let exam_name = &next.1;
-        let exam_date = &next.3;
-        AgentMessage {
-            text: format!(
-                "Próximo exame: {} em {}. Aderência hoje: {}%.",
-                exam_name, exam_date, adherence_pct
-            ),
-            category: "schedule".into(),
-            priority: "low".into(),
-            action: None,
-        }
     } else if hour >= 6 && hour < 9 {
         AgentMessage {
-            text: "Bom dia. Novo ciclo de recuperação iniciado. Preparar protocolo matinal.".into(),
+            text: format!(
+                "Bom dia. Aderência: {}%. Pendentes: {}.",
+                adherence_pct, pending_names.join(", ")
+            ),
             category: "calm_nudge".into(),
             priority: "low".into(),
             action: None,
         }
-    } else if hour >= 14 && hour < 17 {
+    } else if hour >= 20 && hour < 23 {
         AgentMessage {
             text: format!(
-                "Aderência hoje: {}%. {}",
-                adherence_pct,
-                if adherence_pct >= 80 {
-                    "Bom ritmo. Manter foco."
-                } else {
-                    "Alguns suplementos pendentes."
-                }
+                "Fase noturna. Aderência: {}%. {}",
+                adherence_pct, exam_context
             ),
-            category: "health_insight".into(),
-            priority: "low".into(),
-            action: None,
-        }
-    } else if hour >= 20 && hour < 22 {
-        AgentMessage {
-            text: "Fase de desaceleração. Reduzir luz azul. Protocolo noturno em breve.".into(),
             category: "calm_nudge".into(),
             priority: "low".into(),
             action: None,
@@ -225,8 +244,13 @@ pub async fn get_agent_message(
     } else {
         AgentMessage {
             text: format!(
-                "Sistema estável. Aderência: {}%. Monitorização ativa.",
-                adherence_pct
+                "Sistema estável. Aderência: {}%. {}",
+                adherence_pct,
+                if !pending_names.is_empty() {
+                    format!("Pendentes: {}.", pending_names.join(", "))
+                } else {
+                    "Tudo em dia.".to_string()
+                }
             ),
             category: "health_insight".into(),
             priority: "low".into(),
@@ -235,6 +259,80 @@ pub async fn get_agent_message(
     };
 
     Ok(message)
+}
+
+/// Call Gemini for contextual agent intelligence
+async fn call_gemini_agent(
+    api_key: &str,
+    hour: u32,
+    adherence_pct: u32,
+    taken: &[&str],
+    pending: &[&str],
+    all_supplements: &[&str],
+    exam_context: &str,
+) -> Result<String, String> {
+    let time_period = match hour {
+        6..=9 => "manhã (despertar)",
+        10..=13 => "meio do dia (foco)",
+        14..=17 => "tarde (manutenção)",
+        18..=21 => "noite (desaceleração)",
+        22..=23 => "noite tardia (preparar sono)",
+        _ => "madrugada",
+    };
+
+    let prompt = format!(
+        "Tu és o HoloSelf, um agente de saúde pessoal calmo e direto (estilo Jarvis). \
+         Responde em Português (PT-BR). Máximo 2 frases curtas. Sem emojis. Tom: calmo, preciso, encorajador.\n\n\
+         Contexto actual:\n\
+         - Hora: {}h ({})\n\
+         - Aderência hoje: {}%\n\
+         - Suplementos tomados: {}\n\
+         - Pendentes: {}\n\
+         - Protocolo completo: {}\n\
+         - {}\n\n\
+         Dá uma mensagem contextual breve baseada neste estado. \
+         Se tudo está em dia, encoraja. Se há pendentes, lembra com calma. \
+         Se é noite, sugere desacelerar. Nunca alarmar.",
+        hour, time_period, adherence_pct,
+        if taken.is_empty() { "nenhum" } else { &taken.join(", ") },
+        if pending.is_empty() { "nenhum" } else { &pending.join(", ") },
+        all_supplements.join(", "),
+        exam_context,
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
+            api_key
+        ))
+        .json(&serde_json::json!({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": 100,
+                "temperature": 0.7,
+            }
+        }))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("Gemini request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Gemini API error: {}", response.status()));
+    }
+
+    let body: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+
+    body.get("candidates")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("content"))
+        .and_then(|c| c.get("parts"))
+        .and_then(|p| p.get(0))
+        .and_then(|p| p.get("text"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.trim().to_string())
+        .ok_or("Gemini returned empty response".to_string())
 }
 
 /// Execute an agent-suggested action (called from frontend after user confirms)

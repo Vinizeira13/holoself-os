@@ -9,7 +9,7 @@ pub struct Database {
     conn: Connection,
 }
 
-const CURRENT_SCHEMA_VERSION: i64 = 1;
+const _CURRENT_SCHEMA_VERSION: i64 = 1;
 
 impl Database {
     pub fn new(path: &Path) -> SqlResult<Self> {
@@ -92,13 +92,14 @@ impl Database {
                 created_at TEXT DEFAULT (datetime('now'))
             );
 
-            -- Agent memory / RAG embeddings (for sqlite-vec later)
+            -- Agent memory (voice inputs, context, RAG embeddings)
             CREATE TABLE IF NOT EXISTS agent_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                category TEXT NOT NULL,
-                embedding BLOB,
-                created_at TEXT DEFAULT (datetime('now'))
+                key TEXT NOT NULL,
+                value TEXT NOT NULL,
+                timestamp TEXT DEFAULT (datetime('now')),
+                category TEXT,
+                embedding BLOB
             );
 
             -- Indexes
@@ -169,7 +170,7 @@ impl Database {
                 FROM vitals WHERE recorded_at BETWEEN ?1 AND ?2
             ) ORDER BY timestamp DESC"
         )?;
-        let entries = stmt.query_map(rusqlite::params![from, to, from, to], |row| {
+        let entries = stmt.query_map(rusqlite::params![from, to], |row| {
             Ok(HealthTimelineEntry {
                 timestamp: row.get(0)?,
                 event_type: row.get(1)?,
