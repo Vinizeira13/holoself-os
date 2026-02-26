@@ -40,6 +40,64 @@ pub async fn check_setup_status() -> Result<SetupStatus, String> {
     })
 }
 
+/// Full dependency health check — call on app startup
+/// Returns which components are OK and which need repair
+#[derive(serde::Serialize)]
+pub struct DependencyHealth {
+    pub whisper_binary: bool,
+    pub whisper_model: bool,
+    pub ffmpeg: bool,
+    pub gemini_key: bool,
+    pub needs_repair: bool,
+    pub message: String,
+}
+
+#[tauri::command]
+pub async fn check_dependencies() -> Result<DependencyHealth, String> {
+    let home = dirs::home_dir().unwrap_or_default();
+    let holoself_dir = home.join(".holoself");
+
+    let whisper_binary = find_whisper_binary().is_some();
+    let whisper_model = find_whisper_model().is_some();
+
+    // Check ffmpeg: bundled → PATH
+    let ffmpeg = holoself_dir.join("bin/ffmpeg").exists()
+        || Command::new("which").arg("ffmpeg").output()
+            .map(|o| o.status.success()).unwrap_or(false);
+
+    let gemini_key = std::env::var("GEMINI_API_KEY")
+        .map(|k| !k.is_empty() && k != "your_gemini_api_key_here")
+        .unwrap_or(false);
+
+    let needs_repair = !whisper_binary || !whisper_model || !ffmpeg;
+
+    let message = if !needs_repair {
+        "Todos os componentes operacionais.".to_string()
+    } else {
+        let mut missing = Vec::new();
+        if !whisper_binary { missing.push("motor de transcrição"); }
+        if !whisper_model { missing.push("modelo de voz"); }
+        if !ffmpeg { missing.push("conversor de áudio"); }
+        format!("Componentes em falta: {}. Clique em reparar para instalar automaticamente.", missing.join(", "))
+    };
+
+    Ok(DependencyHealth {
+        whisper_binary,
+        whisper_model,
+        ffmpeg,
+        gemini_key,
+        needs_repair,
+        message,
+    })
+}
+
+/// Repair missing dependencies — reinstalls only what's missing
+#[tauri::command]
+pub async fn repair_dependencies() -> Result<String, String> {
+    // Just call the same install function — it skips what's already installed
+    install_whisper_auto().await
+}
+
 /// Save API keys to .env file in the app data directory
 #[tauri::command]
 pub async fn save_api_keys(

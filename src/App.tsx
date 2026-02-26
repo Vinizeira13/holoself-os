@@ -26,6 +26,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [setupDone, setSetupDone] = useState<boolean | null>(null); // null = loading
   const [showWidgets, setShowWidgets] = useState(true);
+  const [depWarning, setDepWarning] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState(false);
   const fetchAgentMessage = useAgentStore((s) => s.fetchMessage);
   const speakCurrent = useAgentStore((s) => s.speakCurrent);
   const speakText = useAgentStore((s) => s.speakText);
@@ -61,6 +63,58 @@ export default function App() {
       setSetupDone(false);
     })();
   }, []);
+
+  // === DEPENDENCY CHECK (on startup, after setup) ===
+  useEffect(() => {
+    if (!setupDone) return;
+    if (typeof window.__TAURI__ === "undefined") return;
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const health = await invoke<{
+          needs_repair: boolean; message: string;
+        }>("check_dependencies");
+        if (health.needs_repair) {
+          setDepWarning(health.message);
+        }
+      } catch { /* non-critical */ }
+    })();
+  }, [setupDone]);
+
+  // === AUTO-UPDATE CHECK ===
+  useEffect(() => {
+    if (!setupDone) return;
+    if (typeof window.__TAURI__ === "undefined") return;
+    (async () => {
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const update = await check();
+        if (update) {
+          toast(`Nova versão disponível: v${update.version}`, "info");
+          // Auto-download + install on next restart
+          await update.downloadAndInstall();
+          toast("Atualização instalada. Reinicie o app para aplicar.", "info");
+        }
+      } catch {
+        // Updater not configured yet or network issue — silent
+      }
+    })();
+  }, [setupDone, toast]);
+
+  const handleRepairDeps = useCallback(async () => {
+    if (typeof window.__TAURI__ === "undefined") return;
+    setRepairing(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("repair_dependencies");
+      setDepWarning(null);
+      toast("Componentes reparados com sucesso!", "success");
+    } catch (err) {
+      toast(`Erro ao reparar: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setRepairing(false);
+    }
+  }, [toast]);
 
   // === PRESENCE DETECTION (Feature 2) ===
   const presence = usePresenceDetector({
@@ -328,6 +382,31 @@ export default function App() {
         muted
         autoPlay
       />
+
+      {/* Dependency repair banner */}
+      {depWarning && (
+        <div style={{
+          position: "absolute", bottom: 60, left: 16, right: 16, zIndex: 300,
+          padding: "10px 14px", borderRadius: 8,
+          background: "rgba(255,71,87,0.12)", border: "1px solid rgba(255,71,87,0.3)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          fontFamily: "var(--font-mono)", fontSize: 10,
+        }}>
+          <span style={{ color: "#ff9f43" }}>{depWarning}</span>
+          <button
+            onClick={handleRepairDeps}
+            disabled={repairing}
+            style={{
+              padding: "5px 12px", borderRadius: 4, cursor: "pointer",
+              background: "rgba(0,255,136,0.15)", border: "1px solid rgba(0,255,136,0.3)",
+              color: "#00ff88", fontFamily: "inherit", fontSize: 9,
+              fontWeight: 600, letterSpacing: 1, whiteSpace: "nowrap",
+            }}
+          >
+            {repairing ? "REPARANDO..." : "REPARAR"}
+          </button>
+        </div>
+      )}
 
       {/* Drag region for window move */}
       <div

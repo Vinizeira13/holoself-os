@@ -56,6 +56,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/Vinizeira13/holoself-os/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   }
 }
