@@ -293,13 +293,14 @@ export function SetupWizard({ onComplete }: Props) {
               Whisper.cpp (STT Local)
             </h2>
             <p style={{ fontSize: 12, lineHeight: 1.7, color: "rgba(200,214,229,0.7)", margin: "0 0 12px" }}>
-              O Whisper converte a tua voz em texto localmente (sem cloud). Precisa do binário + modelo.
+              O Whisper converte a tua voz em texto localmente (sem cloud, 100% privado).
+              Vai baixar o modelo <span style={{ color: "#00ff88" }}>large-v3-turbo</span> (~1.6GB) para máxima qualidade em Português.
             </p>
 
             <div style={{ fontSize: 12, marginBottom: 12 }}>
               {statusDot(status?.whisper_binary ?? false)} Binário whisper-cli
               <br />
-              {statusDot(status?.whisper_model ?? false)} Modelo GGML
+              {statusDot(status?.whisper_model ?? false)} Modelo large-v3-turbo (PT-BR otimizado)
             </div>
 
             {!(status?.whisper_binary && status?.whisper_model) && (
@@ -334,11 +335,14 @@ export function SetupWizard({ onComplete }: Props) {
 git clone https://github.com/ggerganov/whisper.cpp
 cd whisper.cpp && make
 
-# Baixar modelo (base = 142MB)
-bash ./models/download-ggml-model.sh base
+# Baixar modelo turbo (1.6GB, melhor PT-BR)
+bash ./models/download-ggml-model.sh large-v3-turbo
+
+# OU modelo base (142MB, mais rápido)
+# bash ./models/download-ggml-model.sh base
 
 # Testar
-./main -m models/ggml-base.bin -f samples/jfk.wav`}
+./main -m models/ggml-large-v3-turbo.bin -l pt -f samples/jfk.wav`}
                   </pre>
                 </div>
               </>

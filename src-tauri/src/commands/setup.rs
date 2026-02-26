@@ -128,28 +128,50 @@ pub async fn install_whisper_auto() -> Result<String, String> {
         ));
     }
 
-    // Step 3: Download base model
-    let model_path = whisper_dir.join("models/ggml-base.bin");
-    if !model_path.exists() {
+    // Step 3: Download large-v3-turbo model (best PT-BR quality, 1.6GB)
+    // Falls back to base model if turbo fails (e.g. disk space)
+    let turbo_path = whisper_dir.join("models/ggml-large-v3-turbo.bin");
+    let base_path = whisper_dir.join("models/ggml-base.bin");
+
+    let model_path = if turbo_path.exists() {
+        turbo_path.clone()
+    } else if base_path.exists() {
+        base_path.clone()
+    } else {
+        // Try turbo first, fallback to base
         let script = whisper_dir.join("models/download-ggml-model.sh");
-        if script.exists() {
-            let dl_output = Command::new("bash")
+        if !script.exists() {
+            return Err("Model download script not found".to_string());
+        }
+
+        let dl_output = Command::new("bash")
+            .arg(&script)
+            .arg("large-v3-turbo")
+            .current_dir(&whisper_dir)
+            .output()
+            .map_err(|e| format!("Model download failed: {}", e))?;
+
+        if dl_output.status.success() && turbo_path.exists() {
+            turbo_path.clone()
+        } else {
+            // Fallback to base (smaller, faster download)
+            log::warn!("large-v3-turbo download failed, trying base model");
+            let dl_base = Command::new("bash")
                 .arg(&script)
                 .arg("base")
                 .current_dir(&whisper_dir)
                 .output()
-                .map_err(|e| format!("Model download failed: {}", e))?;
+                .map_err(|e| format!("Base model download failed: {}", e))?;
 
-            if !dl_output.status.success() {
+            if !dl_base.status.success() {
                 return Err(format!(
                     "Model download failed: {}",
-                    String::from_utf8_lossy(&dl_output.stderr).chars().take(500).collect::<String>()
+                    String::from_utf8_lossy(&dl_base.stderr).chars().take(500).collect::<String>()
                 ));
             }
-        } else {
-            return Err("Model download script not found".to_string());
+            base_path.clone()
         }
-    }
+    };
 
     // Set env vars for this session
     let binary = find_whisper_binary_in(&whisper_dir);
