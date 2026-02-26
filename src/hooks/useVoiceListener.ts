@@ -14,6 +14,8 @@ interface VoiceListenerOptions {
   minSpeechMs?: number;          // minimum speech duration to process
   amplitudeThreshold?: number;   // 0-1, voice detection sensitivity
   enabled?: boolean;
+  timeoutMs?: number;            // auto-stop after N ms (0 = no timeout)
+  onTimeout?: () => void;        // callback when timeout fires
 }
 
 const DEFAULT_SILENCE_MS = 1500;
@@ -31,7 +33,11 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
     minSpeechMs = DEFAULT_MIN_SPEECH_MS,
     amplitudeThreshold = DEFAULT_AMPLITUDE,
     enabled = true,
+    timeoutMs = 0,
+    onTimeout,
   } = options;
+
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<VoiceListenerState>({
     isListening: false,
@@ -196,6 +202,27 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
       recorderRef.current = recorder;
       setState(s => ({ ...s, isListening: true, error: null }));
 
+      // Auto-stop timeout (push-to-talk mode)
+      if (timeoutMs > 0) {
+        timeoutRef.current = setTimeout(() => {
+          // Inline stop to avoid circular dep
+          if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+          }
+          if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
+          analyserRef.current = null;
+          recorderRef.current = null;
+          isSpeakingRef.current = false;
+          setState({ isListening: false, isProcessing: false, isSpeaking: false, lastTranscript: null, error: null });
+          onTimeout?.();
+        }, timeoutMs);
+      }
+
       // Start VAD loop
       rafRef.current = requestAnimationFrame(checkVAD);
     } catch (err) {
@@ -204,9 +231,10 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
         error: err instanceof Error ? err.message : "Microfone não disponível",
       }));
     }
-  }, [checkVAD, processAudioChunk]);
+  }, [checkVAD, processAudioChunk, timeoutMs, onTimeout]);
 
   const stop = useCallback(() => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();

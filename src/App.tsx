@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState, useRef } from "react";
 import { ErrorBoundary } from "./components/hud/ErrorBoundary";
 import { HoloScene } from "./components/avatar/HoloScene";
 import { HudOverlay } from "./components/hud/HudOverlay";
@@ -9,10 +9,15 @@ import { ToastContainer, useToastStore } from "./components/hud/Toast";
 import { VitaminDWidget } from "./components/health/VitaminDWidget";
 import { ScheduleWidget } from "./components/health/ScheduleWidget";
 import { WpmWidget } from "./components/health/WpmWidget";
+import { PostureWidget } from "./components/health/PostureWidget";
 import { VoiceOrb } from "./components/hud/VoiceOrb";
 import { IconSettings, IconVolume, IconEye, IconEyeOff } from "./components/hud/Icons";
 import { JarvisHud } from "./components/hud/JarvisHud";
 import { useAgentStore } from "./stores/agentStore";
+import { usePresenceDetector } from "./hooks/usePresenceDetector";
+import { usePostureMonitor } from "./hooks/usePostureMonitor";
+import { useHealthContext, type ProactiveAlert } from "./hooks/useHealthContext";
+import { useDailySummary } from "./hooks/useDailySummary";
 import type { OcrResult } from "./types/health";
 
 export default function App() {
@@ -24,6 +29,76 @@ export default function App() {
   const autoSpeak = useAgentStore((s) => s.autoSpeak);
   const setAutoSpeak = useAgentStore((s) => s.setAutoSpeak);
   const toast = useToastStore((s) => s.add);
+  const focusStartRef = useRef(Date.now());
+  const breakCountRef = useRef(0);
+
+  // === PRESENCE DETECTION (Feature 2) ===
+  const presence = usePresenceDetector({
+    enabled: true,
+    onReturn: (awayMs) => {
+      const mins = Math.floor(awayMs / 60_000);
+      if (mins >= 1) {
+        toast(`Bem-vindo de volta. Passaram ${mins} minuto${mins !== 1 ? "s" : ""}.`, "info");
+        breakCountRef.current += 1;
+        focusStartRef.current = Date.now(); // reset focus timer
+      }
+    },
+    onLeave: () => {
+      toast("Presença não detectada. Pausando agent.", "info");
+    },
+  });
+
+  // === POSTURE MONITOR (Feature 3) ===
+  const posture = usePostureMonitor(presence.videoRef, {
+    onBadPosture: (durationMs) => {
+      const mins = Math.floor(durationMs / 60_000);
+      toast(`Postura baixa há ${mins}min. Endireita as costas!`, "info");
+    },
+  });
+
+  // === PROACTIVE ALERTS (Feature 4) ===
+  const handleAlert = useCallback((alert: ProactiveAlert) => {
+    toast(alert.message, alert.priority === 1 ? "error" : "info");
+    // Also speak high-priority alerts
+    if (alert.priority === 1 && autoSpeak) {
+      speakCurrent();
+    }
+  }, [toast, autoSpeak, speakCurrent]);
+
+  useHealthContext(
+    {
+      wpm: 0, // Will be populated when we integrate WPM store
+      wpmTrend: "stable",
+      postureScore: posture.score,
+      isPresent: presence.isPresent,
+      focusDurationMin: Math.floor((Date.now() - focusStartRef.current) / 60_000),
+      breaksTaken: breakCountRef.current,
+      lastBreakAt: 0,
+    },
+    { onAlert: handleAlert }
+  );
+
+  // === DAILY SUMMARY (Feature 5) ===
+  useDailySummary({
+    enabled: true,
+    onSummaryReady: async (summary) => {
+      toast("Relatório diário pronto!", "info");
+      // Speak the daily summary
+      if (typeof window.__TAURI__ !== "undefined") {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const audioBytes = await invoke<number[]>("speak", { text: summary });
+          const audioBlob = new Blob([new Uint8Array(audioBytes)], { type: "audio/wav" });
+          const url = URL.createObjectURL(audioBlob);
+          const audio = new Audio(url);
+          audio.play();
+          audio.onended = () => URL.revokeObjectURL(url);
+        } catch {
+          // Silent fail
+        }
+      }
+    },
+  });
 
   useEffect(() => {
     fetchAgentMessage();
@@ -140,11 +215,32 @@ export default function App() {
           </div>
         )}
 
-        {/* RIGHT PANEL: Schedule + extras */}
+        {/* RIGHT PANEL: Schedule + Posture + Presence */}
         {showWidgets && (
           <div className="hud-panel-right">
             <div className="slide-in-right stagger-1">
               <ScheduleWidget />
+            </div>
+            <div className="slide-in-right stagger-2">
+              <PostureWidget posture={posture} />
+            </div>
+            <div className="slide-in-right stagger-3">
+              <div className="holo-card" style={{ textAlign: "center" }}>
+                <span className="holo-label">PRESENÇA</span>
+                <div className="holo-metric" style={{
+                  color: presence.isPresent ? "var(--holo-primary)" : "var(--holo-alert)",
+                }}>
+                  {presence.isPresent ? "ATIVO" : "AUSENTE"}
+                </div>
+                {!presence.cameraAvailable && (
+                  <div style={{ fontSize: 7, color: "var(--holo-text-dim)", marginTop: 2 }}>Câmera indisponível</div>
+                )}
+                {!presence.isPresent && presence.awayDurationMs > 60_000 && (
+                  <div style={{ fontSize: 7, color: "var(--holo-accent)", marginTop: 2 }}>
+                    Fora há {Math.floor(presence.awayDurationMs / 60_000)}min
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -181,6 +277,15 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Hidden video for camera-based presence/posture detection */}
+      <video
+        ref={presence.videoRef}
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        playsInline
+        muted
+        autoPlay
+      />
 
       {/* Drag region for window move */}
       <div

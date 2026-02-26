@@ -286,3 +286,54 @@ pub async fn execute_agent_action(
 }
 
 // Voice input moved to commands::voice (Whisper.cpp integration)
+
+/// Daily stats for summary (Feature 5)
+#[derive(serde::Serialize)]
+pub struct DailyStats {
+    pub adherence_percent: u32,
+    pub breaks_taken: u32,
+    pub avg_posture_score: u32,
+    pub focus_minutes: u32,
+    pub voice_commands: u32,
+}
+
+#[tauri::command]
+pub async fn get_daily_stats(
+    state: State<'_, DbState>,
+) -> Result<DailyStats, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+
+    // Count today's supplement adherence
+    let total_supplements: u32 = db.query_row(
+        "SELECT COUNT(*) FROM supplements WHERE schedule_time IS NOT NULL",
+        [],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    let taken_today: u32 = db.query_row(
+        "SELECT COUNT(*) FROM supplement_log WHERE date(taken_at) = date('now')",
+        [],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    let adherence = if total_supplements > 0 {
+        ((taken_today as f64 / total_supplements as f64) * 100.0) as u32
+    } else {
+        0
+    };
+
+    // Voice commands today
+    let voice_count: u32 = db.query_row(
+        "SELECT COUNT(*) FROM agent_memory WHERE key = 'voice_input' AND date(timestamp) = date('now')",
+        [],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    Ok(DailyStats {
+        adherence_percent: adherence,
+        breaks_taken: 0,
+        avg_posture_score: 0,
+        focus_minutes: 0,
+        voice_commands: voice_count,
+    })
+}
