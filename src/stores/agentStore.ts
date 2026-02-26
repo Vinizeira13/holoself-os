@@ -10,9 +10,55 @@ function getAudioCtx(): AudioContext {
   return _audioCtx;
 }
 
+// === Global speech queue — prevents overlapping audio ===
+let _isSpeaking = false;
+const _speechQueue: Array<() => Promise<void>> = [];
+
+async function processSpeechQueue() {
+  if (_isSpeaking || _speechQueue.length === 0) return;
+  _isSpeaking = true;
+  const task = _speechQueue.shift()!;
+  try {
+    await task();
+  } finally {
+    _isSpeaking = false;
+    // Process next in queue
+    processSpeechQueue();
+  }
+}
+
+/** Play audio bytes through the singleton AudioContext. Returns a promise that resolves when playback ends. */
+function playAudioBytes(audioBytes: number[]): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const audioCtx = getAudioCtx();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      const buffer = new Uint8Array(audioBytes).buffer;
+      const audioBuffer = await audioCtx.decodeAudioData(buffer);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => resolve();
+      source.start();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Queue a text-to-speech request. Prevents overlapping. */
+export function queueSpeak(getText: () => Promise<number[]>): void {
+  _speechQueue.push(async () => {
+    const audioBytes = await getText();
+    await playAudioBytes(audioBytes);
+  });
+  processSpeechQueue();
+}
+
 interface AgentState {
   message: AgentMessage | null;
   isLoading: boolean;
+  isSpeaking: boolean;
   error: string | null;
   autoSpeak: boolean;
   lastSpokenText: string | null;
@@ -20,11 +66,14 @@ interface AgentState {
   clearMessage: () => void;
   setAutoSpeak: (v: boolean) => void;
   speakCurrent: () => Promise<void>;
+  /** Speak arbitrary text through the global queue */
+  speakText: (text: string) => void;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
   message: null,
   isLoading: false,
+  isSpeaking: false,
   error: null,
   autoSpeak: true,
   lastSpokenText: null,
@@ -63,23 +112,35 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   speakCurrent: async () => {
     const msg = get().message;
     if (!msg) return;
-    try {
-      if (typeof window.__TAURI__ !== "undefined") {
+    if (typeof window.__TAURI__ === "undefined") return;
+
+    set({ lastSpokenText: msg.text });
+
+    queueSpeak(async () => {
+      set({ isSpeaking: true });
+      try {
         const { invoke } = await import("@tauri-apps/api/core");
         const audioBytes = await invoke<number[]>("speak_agent_message");
-        const audioCtx = getAudioCtx();
-        if (audioCtx.state === "suspended") await audioCtx.resume();
-        const buffer = new Uint8Array(audioBytes).buffer;
-        const audioBuffer = await audioCtx.decodeAudioData(buffer);
-        const source = audioCtx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioCtx.destination);
-        source.start();
-        set({ lastSpokenText: msg.text });
+        return audioBytes;
+      } finally {
+        set({ isSpeaking: false });
       }
-    } catch {
-      // TTS error — silent fail, non-critical
-    }
+    });
+  },
+
+  speakText: (text: string) => {
+    if (typeof window.__TAURI__ === "undefined") return;
+
+    queueSpeak(async () => {
+      set({ isSpeaking: true });
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const audioBytes = await invoke<number[]>("speak", { text });
+        return audioBytes;
+      } finally {
+        set({ isSpeaking: false });
+      }
+    });
   },
 }));
 

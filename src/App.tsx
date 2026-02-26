@@ -28,6 +28,7 @@ export default function App() {
   const [showWidgets, setShowWidgets] = useState(true);
   const fetchAgentMessage = useAgentStore((s) => s.fetchMessage);
   const speakCurrent = useAgentStore((s) => s.speakCurrent);
+  const speakText = useAgentStore((s) => s.speakText);
   const autoSpeak = useAgentStore((s) => s.autoSpeak);
   const setAutoSpeak = useAgentStore((s) => s.setAutoSpeak);
   const toast = useToastStore((s) => s.add);
@@ -112,20 +113,8 @@ export default function App() {
     enabled: true,
     onSummaryReady: async (summary) => {
       toast("Relatório diário pronto!", "info");
-      // Speak the daily summary
-      if (typeof window.__TAURI__ !== "undefined") {
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const audioBytes = await invoke<number[]>("speak", { text: summary });
-          const audioBlob = new Blob([new Uint8Array(audioBytes)], { type: "audio/wav" });
-          const url = URL.createObjectURL(audioBlob);
-          const audio = new Audio(url);
-          audio.play();
-          audio.onended = () => URL.revokeObjectURL(url);
-        } catch {
-          // Silent fail
-        }
-      }
+      // Speak through global queue (prevents overlapping)
+      speakText(summary);
     },
   });
 
