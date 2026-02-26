@@ -230,6 +230,17 @@ export function useVoiceListener(options: VoiceListenerOptions): VoiceListenerSt
       // Start VAD loop
       rafRef.current = requestAnimationFrame(checkVAD);
     } catch (err) {
+      // Cleanup any partially acquired resources
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+      analyserRef.current = null;
+      recorderRef.current = null;
       setState(s => ({
         ...s,
         error: err instanceof Error ? err.message : "Microfone não disponível",

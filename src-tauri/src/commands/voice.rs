@@ -47,30 +47,92 @@ pub async fn speak_agent_message(
     synthesize_speech(&message.text).await
 }
 
-/// Transcribe audio file using Whisper.cpp
+/// Transcribe audio file using Whisper.cpp, then cleanup temp file
 #[tauri::command]
 pub async fn process_voice_input(
     audio_path: String,
     language: Option<String>,
 ) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || {
-        whisper::transcribe(&audio_path, language.as_deref())
+    let path_clone = audio_path.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        whisper::transcribe(&path_clone, language.as_deref())
             .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("Task join error: {}", e))?
+    .map_err(|e| format!("Task join error: {}", e))?;
+
+    // Cleanup temp audio file after transcription
+    let _ = std::fs::remove_file(&audio_path);
+
+    result
 }
 
-/// Save temporary audio data from frontend for Whisper processing
+/// Save temporary audio data from frontend for Whisper processing.
+/// Accepts WebM (Opus) from MediaRecorder and converts to WAV via ffmpeg/afconvert.
 #[tauri::command]
 pub async fn save_temp_audio(
     audio_data: Vec<u8>,
 ) -> Result<String, String> {
     let temp_dir = std::env::temp_dir().join("holoself");
     std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
-    let path = temp_dir.join(format!("voice_{}.webm", chrono::Utc::now().timestamp_millis()));
-    std::fs::write(&path, &audio_data).map_err(|e| e.to_string())?;
-    Ok(path.to_string_lossy().to_string())
+
+    let ts = chrono::Utc::now().timestamp_millis();
+    let webm_path = temp_dir.join(format!("voice_{}.webm", ts));
+    let wav_path = temp_dir.join(format!("voice_{}.wav", ts));
+
+    std::fs::write(&webm_path, &audio_data).map_err(|e| e.to_string())?;
+
+    // Convert WebM → WAV (16kHz mono PCM16 — Whisper optimal format)
+    let converted = convert_to_wav(&webm_path, &wav_path);
+
+    // Cleanup source WebM
+    let _ = std::fs::remove_file(&webm_path);
+
+    match converted {
+        Ok(()) => Ok(wav_path.to_string_lossy().to_string()),
+        Err(e) => Err(format!("Audio conversion failed: {}. Ensure ffmpeg or afconvert is available.", e)),
+    }
+}
+
+/// Convert audio file to WAV 16kHz mono PCM16 using ffmpeg (cross-platform) or afconvert (macOS)
+fn convert_to_wav(input: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
+    // Try ffmpeg first (cross-platform, handles WebM/Opus natively)
+    let ffmpeg = std::process::Command::new("ffmpeg")
+        .arg("-y")
+        .arg("-i").arg(input)
+        .arg("-ar").arg("16000")
+        .arg("-ac").arg("1")
+        .arg("-c:a").arg("pcm_s16le")
+        .arg("-f").arg("wav")
+        .arg(output)
+        .stderr(std::process::Stdio::piped())
+        .output();
+
+    if let Ok(out) = ffmpeg {
+        if out.status.success() {
+            return Ok(());
+        }
+    }
+
+    // Fallback: afconvert (macOS only — may not handle WebM but works for some formats)
+    let afconvert = std::process::Command::new("afconvert")
+        .arg("-f").arg("WAVE")
+        .arg("-d").arg("LEI16@16000")
+        .arg("-c").arg("1")
+        .arg(input)
+        .arg(output)
+        .stderr(std::process::Stdio::piped())
+        .output();
+
+    if let Ok(out) = afconvert {
+        if out.status.success() {
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("afconvert failed: {}", stderr));
+    }
+
+    Err("Neither ffmpeg nor afconvert available".to_string())
 }
 
 /// Process voice command: transcribe + interpret via agent

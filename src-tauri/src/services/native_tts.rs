@@ -55,8 +55,10 @@ pub fn synthesize(text: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("afconvert failed: {}", e))?;
 
     if !convert.status.success() {
-        // Fallback: try reading AIFF directly (some frontends can decode it)
-        return std::fs::read(&aiff_path).map_err(|e| format!("Failed to read audio: {}", e));
+        let stderr = String::from_utf8_lossy(&convert.stderr);
+        // Cleanup AIFF before returning error
+        let _ = std::fs::remove_file(&aiff_path);
+        return Err(format!("afconvert AIFF→WAV failed: {}", stderr));
     }
 
     let bytes = std::fs::read(&wav_path)

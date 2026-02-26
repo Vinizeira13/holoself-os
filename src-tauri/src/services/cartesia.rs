@@ -69,7 +69,7 @@ pub async fn synthesize(text: &str, config: &CartesiaConfig) -> Result<Vec<u8>, 
     let response = client
         .post(CARTESIA_API_URL)
         .header("X-API-Key", &config.api_key)
-        .header("Cartesia-Version", "2024-06-10")
+        .header("Cartesia-Version", "2025-04-16")
         .json(&request)
         .send()
         .await

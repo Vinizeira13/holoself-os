@@ -11,6 +11,7 @@ export type ConvoState = "idle" | "listening" | "processing" | "speaking";
 interface ConversationOptions {
   onUserMessage: (text: string, history: ConversationTurn[]) => Promise<string>;
   onAgentSpeak: (text: string) => Promise<void>;
+  onResumeListening?: () => void; // callback to restart mic after agent speaks
   windowMs?: number; // conversation window (default 30s after agent finishes)
   maxTurns?: number; // max turns before auto-close (default 10)
 }
@@ -28,9 +29,13 @@ export function useConversationMode(options: ConversationOptions) {
   const {
     onUserMessage,
     onAgentSpeak,
+    onResumeListening,
     windowMs = DEFAULT_WINDOW_MS,
     maxTurns = DEFAULT_MAX_TURNS,
   } = options;
+
+  const onResumeListeningRef = useRef(onResumeListening);
+  onResumeListeningRef.current = onResumeListening;
 
   const [state, setState] = useState<ConvoState>("idle");
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
@@ -70,8 +75,9 @@ export function useConversationMode(options: ConversationOptions) {
       // Speak the response
       await onAgentSpeak(response);
 
-      // After speaking, reopen window for more input
+      // After speaking, reopen mic + window for more input
       setState("listening");
+      onResumeListeningRef.current?.();
       windowTimerRef.current = setTimeout(() => {
         endConversation();
       }, windowMs);
