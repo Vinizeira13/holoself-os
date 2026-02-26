@@ -26,19 +26,16 @@ export function SetupWizard({ onComplete }: Props) {
   const [whisperInstalling, setWhisperInstalling] = useState(false);
   const [whisperProgress, setWhisperProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showCartesia, setShowCartesia] = useState(false);
 
   const isTauri = typeof window.__TAURI__ !== "undefined";
 
-  // Check current setup status
   const checkStatus = useCallback(async () => {
     if (!isTauri) {
       setStatus({
-        gemini_key: false,
-        cartesia_key: false,
-        whisper_binary: false,
-        whisper_model: false,
-        camera_permission: false,
-        mic_permission: false,
+        gemini_key: false, cartesia_key: false,
+        whisper_binary: false, whisper_model: false,
+        camera_permission: false, mic_permission: false,
       });
       return;
     }
@@ -48,12 +45,9 @@ export function SetupWizard({ onComplete }: Props) {
       setStatus(s);
     } catch {
       setStatus({
-        gemini_key: false,
-        cartesia_key: false,
-        whisper_binary: false,
-        whisper_model: false,
-        camera_permission: false,
-        mic_permission: false,
+        gemini_key: false, cartesia_key: false,
+        whisper_binary: false, whisper_model: false,
+        camera_permission: false, mic_permission: false,
       });
     }
   }, [isTauri]);
@@ -82,18 +76,18 @@ export function SetupWizard({ onComplete }: Props) {
   const installWhisper = useCallback(async () => {
     if (!isTauri) return;
     setWhisperInstalling(true);
-    setWhisperProgress("Baixando whisper.cpp...");
+    setWhisperProgress("A clonar whisper.cpp...");
     setError(null);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      setWhisperProgress("Clonando repositório...");
+      setWhisperProgress("A compilar e descarregar modelo (~1.6GB)... pode demorar 2-5min");
       await invoke("install_whisper_auto");
       setWhisperProgress("Instalado com sucesso!");
       await checkStatus();
       setTimeout(() => setStep("permissions"), 1000);
     } catch (err) {
       setError(`Falha na instalação: ${String(err)}`);
-      setWhisperProgress("Tenta instalar manualmente (ver instruções abaixo)");
+      setWhisperProgress("");
     } finally {
       setWhisperInstalling(false);
     }
@@ -101,27 +95,18 @@ export function SetupWizard({ onComplete }: Props) {
 
   const requestPermissions = useCallback(async () => {
     try {
-      // Request camera
-      await navigator.mediaDevices.getUserMedia({ video: true });
-    } catch { /* user denied or not available */ }
-
-    try {
-      // Request mic
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch { /* user denied or not available */ }
-
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch { /* user denied */ }
     await checkStatus();
     setStep("done");
   }, [checkStatus]);
 
   const currentIdx = STEPS.indexOf(step);
-  const totalSteps = STEPS.length;
 
-  // Check if all essential items are configured
-  const allEssentialDone = status
-    ? status.gemini_key && status.cartesia_key
-    : false;
+  // Only Gemini is truly essential — Cartesia has native fallback
+  const essentialDone = status ? status.gemini_key : false;
 
+  // Styles
   const cardStyle: React.CSSProperties = {
     position: "fixed", inset: 0, zIndex: 9999,
     background: "radial-gradient(ellipse at center, #0a0e14 0%, #000508 100%)",
@@ -142,7 +127,7 @@ export function SetupWizard({ onComplete }: Props) {
     width: "100%", padding: "10px 12px", marginTop: 6,
     background: "rgba(0,0,0,0.4)", border: "1px solid rgba(0,255,136,0.2)",
     borderRadius: 6, color: "#c8d6e5", fontFamily: "inherit", fontSize: 12,
-    outline: "none",
+    outline: "none", boxSizing: "border-box",
   };
 
   const btnPrimary: React.CSSProperties = {
@@ -159,7 +144,7 @@ export function SetupWizard({ onComplete }: Props) {
     color: "#c8d6e5",
   };
 
-  const statusDot = (ok: boolean) => (
+  const dot = (ok: boolean) => (
     <span style={{
       display: "inline-block", width: 8, height: 8, borderRadius: "50%",
       background: ok ? "#00ff88" : "#ff4757",
@@ -171,6 +156,10 @@ export function SetupWizard({ onComplete }: Props) {
   const labelStyle: React.CSSProperties = {
     fontSize: 10, color: "rgba(200,214,229,0.5)",
     textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4,
+  };
+
+  const linkStyle: React.CSSProperties = {
+    color: "#00ff88", textDecoration: "underline", cursor: "pointer",
   };
 
   const progressBar = (
@@ -197,18 +186,33 @@ export function SetupWizard({ onComplete }: Props) {
               HOLOSELF OS
             </div>
             <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 12px", color: "#e8f0fe" }}>
-              Setup Inicial
+              Configuração Inicial
             </h2>
             <p style={{ fontSize: 12, lineHeight: 1.7, color: "rgba(200,214,229,0.7)", margin: "0 0 8px" }}>
-              Vamos configurar tudo para o teu Jarvis funcionar 100%. São {totalSteps - 2} passos rápidos:
+              3 passos rápidos para ativar o teu agente de saúde pessoal:
             </p>
-            <ul style={{ listStyle: "none", padding: 0, margin: "16px 0", fontSize: 12, lineHeight: 2 }}>
-              <li>{statusDot(status?.gemini_key ?? false)} API Keys (Gemini + Cartesia)</li>
-              <li>{statusDot(status?.whisper_binary ?? false)} Whisper.cpp (STT local)</li>
-              <li>{statusDot(status?.camera_permission ?? false)} Permissões (câmera + mic)</li>
+            <ul style={{ listStyle: "none", padding: 0, margin: "16px 0", fontSize: 12, lineHeight: 2.2 }}>
+              <li>
+                {dot(status?.gemini_key ?? false)}
+                <strong>Gemini API Key</strong>
+                <span style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", marginLeft: 6 }}>— cérebro do agente (gratuito)</span>
+              </li>
+              <li>
+                {dot((status?.whisper_binary && status?.whisper_model) ?? false)}
+                <strong>Whisper.cpp</strong>
+                <span style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", marginLeft: 6 }}>— voz → texto (local, privado)</span>
+              </li>
+              <li>
+                {dot(status?.camera_permission ?? false)}
+                <strong>Câmera + Microfone</strong>
+                <span style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", marginLeft: 6 }}>— presença e postura</span>
+              </li>
             </ul>
+            <p style={{ fontSize: 10, color: "rgba(200,214,229,0.35)", margin: "0 0 16px" }}>
+              A voz do agente funciona nativamente via macOS. Sem API de TTS necessária.
+            </p>
             <button style={btnPrimary} onClick={() => setStep("apis")}>
-              COMEÇAR SETUP
+              COMEÇAR
             </button>
           </div>
         )}
@@ -218,18 +222,27 @@ export function SetupWizard({ onComplete }: Props) {
           <div>
             <div style={labelStyle}>PASSO 1 / 3</div>
             <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 16px", color: "#e8f0fe" }}>
-              API Keys
+              Gemini API Key
             </h2>
 
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", fontSize: 12, marginBottom: 2 }}>
-                {statusDot(status?.gemini_key ?? false)}
+                {dot(status?.gemini_key ?? false)}
                 <span style={{ fontWeight: 600 }}>Gemini API Key</span>
                 <span style={{ fontSize: 10, marginLeft: 8, color: "#ff4757" }}>obrigatório</span>
               </div>
-              <p style={{ fontSize: 10, color: "rgba(200,214,229,0.5)", margin: "2px 0 4px" }}>
-                Usado pelo agente para raciocínio e OCR clínico.
-                Obtém em <span style={{ color: "#00ff88" }}>aistudio.google.com/apikey</span>
+              <p style={{ fontSize: 11, color: "rgba(200,214,229,0.6)", margin: "4px 0 8px", lineHeight: 1.6 }}>
+                O cérebro do HoloSelf. Usa o Gemini 2.0 Flash (grátis, 15 req/min).
+              </p>
+              <p style={{ fontSize: 10, color: "rgba(200,214,229,0.45)", margin: "0 0 8px", lineHeight: 1.5 }}>
+                1. Vai a{" "}
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={linkStyle}>
+                  aistudio.google.com/apikey
+                </a>
+                <br />
+                2. Clica "Create API Key" → copia a key
+                <br />
+                3. Cola abaixo
               </p>
               <input
                 type="password"
@@ -240,23 +253,36 @@ export function SetupWizard({ onComplete }: Props) {
               />
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", fontSize: 12, marginBottom: 2 }}>
-                {statusDot(status?.cartesia_key ?? false)}
-                <span style={{ fontWeight: 600 }}>Cartesia API Key</span>
-                <span style={{ fontSize: 10, marginLeft: 8, color: "#ffa502" }}>recomendado</span>
+            {/* Cartesia — collapsed optional section */}
+            <div style={{
+              marginBottom: 16, padding: 12,
+              background: "rgba(255,255,255,0.02)", borderRadius: 6,
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}>
+              <div
+                style={{ fontSize: 11, color: "rgba(200,214,229,0.5)", cursor: "pointer", userSelect: "none" }}
+                onClick={() => setShowCartesia(!showCartesia)}
+              >
+                {showCartesia ? "▾" : "▸"} Cartesia TTS{" "}
+                <span style={{ fontSize: 9, color: "rgba(200,214,229,0.3)" }}>
+                  (opcional — voz premium, sub-100ms)
+                </span>
               </div>
-              <p style={{ fontSize: 10, color: "rgba(200,214,229,0.5)", margin: "2px 0 4px" }}>
-                Usado para TTS (voz do Jarvis). Sub-100ms latência.
-                Obtém em <span style={{ color: "#00ff88" }}>play.cartesia.ai</span>
-              </p>
-              <input
-                type="password"
-                style={inputStyle}
-                placeholder="sk-..."
-                value={cartesiaKey}
-                onChange={e => setCartesiaKey(e.target.value)}
-              />
+              {showCartesia && (
+                <div style={{ marginTop: 8 }}>
+                  <p style={{ fontSize: 10, color: "rgba(200,214,229,0.45)", margin: "0 0 6px" }}>
+                    Sem Cartesia, o agente usa a voz nativa do macOS (Luciana PT-BR).
+                    Com Cartesia, a voz é mais natural e mais rápida.
+                  </p>
+                  <input
+                    type="password"
+                    style={inputStyle}
+                    placeholder="sk-..."
+                    value={cartesiaKey}
+                    onChange={e => setCartesiaKey(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
             {error && (
@@ -274,12 +300,12 @@ export function SetupWizard({ onComplete }: Props) {
               </button>
             </div>
 
-            {!geminiKey && (
+            {!geminiKey && !status?.gemini_key && (
               <button
-                style={{ ...btnSecondary, marginTop: 8, fontSize: 10 }}
+                style={{ ...btnSecondary, marginTop: 8, fontSize: 10, opacity: 0.6 }}
                 onClick={() => setStep("whisper")}
               >
-                PULAR POR AGORA
+                PULAR (o agente funcionará com respostas pré-definidas)
               </button>
             )}
           </div>
@@ -289,21 +315,21 @@ export function SetupWizard({ onComplete }: Props) {
         {step === "whisper" && (
           <div>
             <div style={labelStyle}>PASSO 2 / 3</div>
-            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 16px", color: "#e8f0fe" }}>
-              Whisper.cpp (STT Local)
+            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 12px", color: "#e8f0fe" }}>
+              Whisper.cpp — Voz para Texto
             </h2>
             <p style={{ fontSize: 12, lineHeight: 1.7, color: "rgba(200,214,229,0.7)", margin: "0 0 12px" }}>
-              O Whisper converte a tua voz em texto localmente (sem cloud, 100% privado).
-              Vai baixar o modelo <span style={{ color: "#00ff88" }}>large-v3-turbo</span> (~1.6GB) para máxima qualidade em Português.
+              Transcrição 100% local. Privacidade total. O modelo{" "}
+              <span style={{ color: "#00ff88" }}>large-v3-turbo</span> tem ~5% WER em Português.
             </p>
 
-            <div style={{ fontSize: 12, marginBottom: 12 }}>
-              {statusDot(status?.whisper_binary ?? false)} Binário whisper-cli
+            <div style={{ fontSize: 12, marginBottom: 12, lineHeight: 2 }}>
+              {dot(status?.whisper_binary ?? false)} Binário whisper-cli
               <br />
-              {statusDot(status?.whisper_model ?? false)} Modelo large-v3-turbo (PT-BR otimizado)
+              {dot(status?.whisper_model ?? false)} Modelo (~1.6GB)
             </div>
 
-            {!(status?.whisper_binary && status?.whisper_model) && (
+            {!(status?.whisper_binary && status?.whisper_model) ? (
               <>
                 <button
                   style={{ ...btnPrimary, opacity: whisperInstalling ? 0.5 : 1 }}
@@ -314,42 +340,28 @@ export function SetupWizard({ onComplete }: Props) {
                 </button>
 
                 {whisperProgress && (
-                  <div style={{ fontSize: 11, color: "#00ff88", marginTop: 8 }}>
+                  <div style={{ fontSize: 11, color: "#00ff88", marginTop: 8, lineHeight: 1.5 }}>
                     {whisperProgress}
                   </div>
                 )}
 
-                <div style={{
-                  marginTop: 16, padding: 12,
-                  background: "rgba(255,255,255,0.02)", borderRadius: 6,
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}>
-                  <div style={{ fontSize: 10, color: "rgba(200,214,229,0.5)", marginBottom: 6 }}>
-                    OU INSTALAR MANUALMENTE:
-                  </div>
+                <details style={{ marginTop: 16 }}>
+                  <summary style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", cursor: "pointer" }}>
+                    Instruções manuais (se a instalação automática falhar)
+                  </summary>
                   <pre style={{
-                    fontSize: 10, color: "#00ff88", lineHeight: 1.8, margin: 0,
+                    fontSize: 10, color: "#00ff88", lineHeight: 1.8, margin: "8px 0 0",
                     whiteSpace: "pre-wrap", wordBreak: "break-all",
+                    padding: 12, background: "rgba(0,0,0,0.3)", borderRadius: 6,
                   }}>
-{`# Clonar e compilar
-git clone https://github.com/ggerganov/whisper.cpp
+{`git clone https://github.com/ggerganov/whisper.cpp
 cd whisper.cpp && make
-
-# Baixar modelo turbo (1.6GB, melhor PT-BR)
-bash ./models/download-ggml-model.sh large-v3-turbo
-
-# OU modelo base (142MB, mais rápido)
-# bash ./models/download-ggml-model.sh base
-
-# Testar
-./main -m models/ggml-large-v3-turbo.bin -l pt -f samples/jfk.wav`}
+bash ./models/download-ggml-model.sh large-v3-turbo`}
                   </pre>
-                </div>
+                </details>
               </>
-            )}
-
-            {status?.whisper_binary && status?.whisper_model && (
-              <div style={{ fontSize: 12, color: "#00ff88", marginTop: 8 }}>
+            ) : (
+              <div style={{ fontSize: 12, color: "#00ff88", marginTop: 8, fontWeight: 600 }}>
                 Whisper.cpp instalado e pronto!
               </div>
             )}
@@ -371,26 +383,26 @@ bash ./models/download-ggml-model.sh large-v3-turbo
         {step === "permissions" && (
           <div>
             <div style={labelStyle}>PASSO 3 / 3</div>
-            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 16px", color: "#e8f0fe" }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 12px", color: "#e8f0fe" }}>
               Permissões do Sistema
             </h2>
             <p style={{ fontSize: 12, lineHeight: 1.7, color: "rgba(200,214,229,0.7)", margin: "0 0 12px" }}>
-              O HoloSelf precisa de acesso à câmera (presença + postura) e microfone (voz).
-              Clica abaixo para autorizar.
+              O macOS vai pedir autorização. Clica "Permitir" nos dois popups.
             </p>
 
-            <div style={{ fontSize: 12, marginBottom: 12 }}>
-              {statusDot(status?.camera_permission ?? false)} Câmera (presença + postura)
+            <div style={{ fontSize: 12, marginBottom: 16, lineHeight: 2.2 }}>
+              {dot(status?.camera_permission ?? false)}
+              <strong>Câmera</strong>
+              <span style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", marginLeft: 6 }}>presença + monitor de postura</span>
               <br />
-              {statusDot(status?.mic_permission ?? false)} Microfone (comandos de voz)
+              {dot(status?.mic_permission ?? false)}
+              <strong>Microfone</strong>
+              <span style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", marginLeft: 6 }}>comandos de voz</span>
             </div>
 
             <button style={btnPrimary} onClick={requestPermissions}>
               AUTORIZAR CÂMERA + MIC
             </button>
-            <p style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", marginTop: 8 }}>
-              O macOS vai mostrar um popup de permissão. Clica "Permitir".
-            </p>
 
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button style={btnSecondary} onClick={() => setStep("whisper")}>VOLTAR</button>
@@ -405,30 +417,32 @@ bash ./models/download-ggml-model.sh large-v3-turbo
         {step === "done" && (
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>
-              {allEssentialDone ? "✓" : "⚡"}
+              {essentialDone ? "✓" : "⚡"}
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 12px", color: "#e8f0fe" }}>
-              {allEssentialDone ? "Setup Completo" : "Setup Parcial"}
+            <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 8px", color: "#e8f0fe" }}>
+              {essentialDone ? "Tudo Pronto" : "Setup Parcial"}
             </h2>
+            <p style={{ fontSize: 11, color: "rgba(200,214,229,0.5)", margin: "0 0 16px" }}>
+              {essentialDone
+                ? "O HoloSelf está operacional."
+                : "O agente funciona com respostas pré-definidas. Configura a API Key depois para inteligência total."}
+            </p>
 
-            {/* Status summary */}
-            <div style={{ textAlign: "left", margin: "16px auto", maxWidth: 300, fontSize: 12, lineHeight: 2 }}>
-              {statusDot(status?.gemini_key ?? false)} Gemini API
+            <div style={{ textAlign: "left", margin: "0 auto 20px", maxWidth: 320, fontSize: 12, lineHeight: 2.2 }}>
+              {dot(status?.gemini_key ?? false)} Gemini (inteligência)
               <br />
-              {statusDot(status?.cartesia_key ?? false)} Cartesia TTS
+              {dot((status?.whisper_binary && status?.whisper_model) ?? false)} Whisper (voz → texto)
               <br />
-              {statusDot(status?.whisper_binary ?? false)} Whisper.cpp
+              {dot(status?.camera_permission ?? false)} Câmera + Mic
               <br />
-              {statusDot(status?.camera_permission ?? false)} Câmera
-              <br />
-              {statusDot(status?.mic_permission ?? false)} Microfone
+              {dot(status?.cartesia_key ?? false)}
+              <span style={{ color: "rgba(200,214,229,0.4)" }}>
+                Cartesia TTS
+                <span style={{ fontSize: 9, marginLeft: 4 }}>
+                  {status?.cartesia_key ? "(premium)" : "(usando voz nativa macOS)"}
+                </span>
+              </span>
             </div>
-
-            {!allEssentialDone && (
-              <p style={{ fontSize: 11, color: "#ffa502", margin: "8px 0" }}>
-                Alguns itens ficaram pendentes. Podes configurar depois em Configurações.
-              </p>
-            )}
 
             <button style={btnPrimary} onClick={onComplete}>
               ENTRAR NO HOLOSELF OS

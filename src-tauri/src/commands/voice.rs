@@ -1,22 +1,41 @@
 use tauri::State;
 use crate::db::DbState;
 use crate::services::cartesia::{self, CartesiaConfig};
-use crate::services::whisper;
+use crate::services::{native_tts, whisper};
 
-/// Speak text through Cartesia TTS and return audio bytes
+/// Synthesize speech: tries Cartesia API first, falls back to macOS native TTS
+async fn synthesize_speech(text: &str) -> Result<Vec<u8>, String> {
+    // 1. Try Cartesia if API key is configured
+    if let Ok(api_key) = std::env::var("CARTESIA_API_KEY") {
+        if !api_key.is_empty() && api_key != "your_cartesia_key_here" {
+            let config = CartesiaConfig {
+                api_key,
+                ..Default::default()
+            };
+            match cartesia::synthesize(text, &config).await {
+                Ok(bytes) => return Ok(bytes),
+                Err(e) => {
+                    log::warn!("Cartesia TTS failed, trying native fallback: {}", e);
+                }
+            }
+        }
+    }
+
+    // 2. Fallback: macOS native TTS (say command)
+    let text_owned = text.to_string();
+    tokio::task::spawn_blocking(move || {
+        native_tts::synthesize(&text_owned)
+    })
+    .await
+    .map_err(|e| format!("TTS task join error: {}", e))?
+}
+
+/// Speak text and return audio bytes
 #[tauri::command]
 pub async fn speak(
     text: String,
 ) -> Result<Vec<u8>, String> {
-    let api_key = std::env::var("CARTESIA_API_KEY")
-        .map_err(|_| "CARTESIA_API_KEY not set.".to_string())?;
-
-    let config = CartesiaConfig {
-        api_key,
-        ..Default::default()
-    };
-
-    cartesia::synthesize(&text, &config).await
+    synthesize_speech(&text).await
 }
 
 /// Speak the latest agent message
@@ -25,16 +44,7 @@ pub async fn speak_agent_message(
     state: State<'_, DbState>,
 ) -> Result<Vec<u8>, String> {
     let message = super::agent::get_agent_message(state).await?;
-
-    let api_key = std::env::var("CARTESIA_API_KEY")
-        .map_err(|_| "CARTESIA_API_KEY not set.".to_string())?;
-
-    let config = CartesiaConfig {
-        api_key,
-        ..Default::default()
-    };
-
-    cartesia::synthesize(&message.text, &config).await
+    synthesize_speech(&message.text).await
 }
 
 /// Transcribe audio file using Whisper.cpp
