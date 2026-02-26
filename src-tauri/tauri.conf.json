@@ -15,8 +15,10 @@
       {
         "title": "HoloSelf OS",
         "label": "main",
-        "width": 420,
+        "width": 560,
         "height": 720,
+        "minWidth": 480,
+        "minHeight": 600,
         "x": null,
         "y": null,
         "resizable": true,

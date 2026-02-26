@@ -168,17 +168,17 @@ export function BlinkRateWidget() {
   }, [stopTracking]);
 
   const statusColor = !stats
-    ? "rgba(255, 255, 255, 0.4)"
+    ? "var(--holo-text-dim)"
     : stats.status === "low"
-      ? "rgba(255, 200, 100, 0.8)"
+      ? "var(--holo-warn)"
       : stats.status === "high"
-        ? "rgba(255, 160, 100, 0.8)"
-        : "rgba(100, 255, 180, 0.8)";
+        ? "var(--holo-warn)"
+        : "var(--holo-accent)";
 
   return (
-    <div className="holo-card fade-in" style={{ padding: "12px 16px", marginBottom: 8 }}>
+    <div className="holo-card" style={{ padding: "10px 14px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={labelStyle}>Blink Rate</span>
+        <span className="holo-label">Blink Rate</span>
         <button
           className="holo-icon-btn"
           onClick={enabled ? stopTracking : startTracking}

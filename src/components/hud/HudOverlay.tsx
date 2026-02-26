@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * HudOverlay — Transparent health status overlay
- * Always-on-top minimal information display.
+ * HudOverlay — Top-left time + protocol status
  * Calm Technology: shows only what's needed, when needed.
  */
 export function HudOverlay() {
@@ -18,117 +17,40 @@ export function HudOverlay() {
   const period = getTimePeriod(hour);
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 40,
-        left: 16,
-        right: 16,
-        pointerEvents: "none",
-        zIndex: 50,
-      }}
-    >
-      {/* Time + Status bar */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span
-            className="holo-glow"
-            style={{
-              fontSize: 28,
-              fontWeight: 300,
-              letterSpacing: "0.05em",
-              color: "rgba(120, 200, 255, 0.9)",
-            }}
-          >
-            {hour}:{mins}
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              color: "rgba(255, 255, 255, 0.45)",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-            }}
-          >
-            {period.label}
-          </span>
-        </div>
-
-        {/* Status indicator */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
+    <div style={{ pointerEvents: "none" }}>
+      {/* Time display */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span
+          className="holo-glow holo-metric"
+          style={{ color: "var(--holo-primary)" }}
         >
-          <div
-            className="holo-pulse"
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: period.color,
-              boxShadow: `0 0 8px ${period.color}`,
-            }}
-          />
-          <span
-            style={{
-              fontSize: 10,
-              color: "rgba(255, 255, 255, 0.5)",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {period.status}
-          </span>
-        </div>
+          {hour}:{mins}
+        </span>
       </div>
 
-      {/* Subtle separator */}
-      <div
-        style={{
-          height: 1,
-          background:
-            "linear-gradient(90deg, transparent, rgba(120, 200, 255, 0.2), transparent)",
-        }}
-      />
+      {/* Protocol status */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 4 }}>
+        <div
+          className="status-dot neon-pulse"
+          style={{ color: period.color, background: period.color }}
+        />
+        <span className="holo-label" style={{ fontSize: 7 }}>
+          {period.status}
+        </span>
+      </div>
     </div>
   );
 }
 
 function getTimePeriod(hour: number) {
   if (hour >= 8 && hour < 12) {
-    return {
-      label: "Manhã",
-      status: "Protocolo Matinal",
-      color: "rgba(100, 255, 180, 0.8)",
-    };
+    return { status: "Protocolo Matinal", color: "var(--holo-accent)" };
   }
   if (hour >= 12 && hour < 18) {
-    return {
-      label: "Tarde",
-      status: "Foco Ativo",
-      color: "rgba(120, 200, 255, 0.8)",
-    };
+    return { status: "Foco Ativo", color: "var(--holo-primary)" };
   }
   if (hour >= 18 && hour < 23) {
-    return {
-      label: "Noite",
-      status: "Wind-down",
-      color: "rgba(180, 140, 255, 0.8)",
-    };
+    return { status: "Wind-down", color: "var(--holo-secondary)" };
   }
-  return {
-    label: "Madrugada",
-    status: "Protocolo Noturno",
-    color: "rgba(180, 140, 255, 0.6)",
-  };
+  return { status: "Protocolo Noturno", color: "var(--holo-secondary)" };
 }

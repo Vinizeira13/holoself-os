@@ -29,19 +29,17 @@ export default function App() {
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-
     const files = Array.from(e.dataTransfer.files);
     const pdf = files.find((f) => f.type === "application/pdf" || f.name.endsWith(".pdf"));
     if (!pdf) return;
-
     toast("A analisar PDF clínico...", "info");
     try {
       if (typeof window.__TAURI__ !== "undefined") {
         const { invoke } = await import("@tauri-apps/api/core");
         const result = await invoke<OcrResult>("ocr_clinical_pdf", { filePath: pdf.name });
-        toast(`${result.markers.length} marcadores extraídos com sucesso.`, "success");
+        toast(`${result.markers.length} marcadores extraídos`, "success");
       } else {
-        toast("OCR disponível apenas no Tauri.", "info");
+        toast("OCR disponível apenas no Tauri", "info");
       }
     } catch (err) {
       toast(`Erro OCR: ${err instanceof Error ? err.message : String(err)}`, "error");
@@ -61,7 +59,7 @@ export default function App() {
         source.connect(audioCtx.destination);
         source.start();
       } else {
-        toast("TTS disponível apenas no Tauri.", "info");
+        toast("TTS disponível apenas no Tauri", "info");
       }
     } catch (err) {
       toast(`Erro TTS: ${err instanceof Error ? err.message : String(err)}`, "error");
@@ -75,26 +73,10 @@ export default function App() {
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* Drag region */}
-      <div data-tauri-drag-region style={{ position: "absolute", top: 0, left: 0, right: 0, height: 32, zIndex: 100 }} />
-
-      {/* Top-right controls */}
-      <div style={{ position: "absolute", top: 8, right: 12, zIndex: 110, display: "flex", gap: 6 }}>
-        <button className="holo-icon-btn" onClick={() => setShowWidgets(!showWidgets)} aria-label={showWidgets ? "Esconder widgets" : "Mostrar widgets"} title={showWidgets ? "Esconder" : "Mostrar"}>
-          {showWidgets ? <IconEye /> : <IconEyeOff />}
-        </button>
-        <button className="holo-icon-btn" onClick={handleSpeak} aria-label="Falar mensagem" title="Falar">
-          <IconVolume />
-        </button>
-        <button className="holo-icon-btn" onClick={() => setShowSettings(true)} aria-label="Configurações" title="Configurações">
-          <IconSettings />
-        </button>
-      </div>
-
-      {/* 3D Canvas */}
+      {/* 3D Avatar — full background */}
       <ErrorBoundary>
         <Canvas
-          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", background: "transparent" }}
+          style={{ position: "absolute", inset: 0, background: "transparent" }}
           gl={{ alpha: true, antialias: true, preserveDrawingBuffer: false }}
           camera={{ position: [0, 0, 3], fov: 45 }}
           dpr={[1, 2]}
@@ -105,46 +87,94 @@ export default function App() {
         </Canvas>
       </ErrorBoundary>
 
-      {/* HUD */}
-      <HudOverlay />
+      {/* Scanline HUD effect */}
+      <div className="hud-scanline" />
+
+      {/* HUD Grid Layout */}
+      <div className="hud-container">
+
+        {/* TOP BAR: time + controls */}
+        <div className="hud-top">
+          {/* Left: HUD Overlay (time, protocol status) */}
+          <HudOverlay />
+
+          {/* Right: Control buttons */}
+          <div style={{ display: "flex", gap: 5 }}>
+            <button
+              className="holo-icon-btn"
+              onClick={() => setShowWidgets(!showWidgets)}
+              aria-label={showWidgets ? "Esconder widgets" : "Mostrar widgets"}
+            >
+              {showWidgets ? <IconEye /> : <IconEyeOff />}
+            </button>
+            <button className="holo-icon-btn" onClick={handleSpeak} aria-label="Falar mensagem">
+              <IconVolume />
+            </button>
+            <button className="holo-icon-btn" onClick={() => setShowSettings(true)} aria-label="Configurações">
+              <IconSettings />
+            </button>
+          </div>
+        </div>
+
+        {/* LEFT PANEL: Health widgets */}
+        {showWidgets && (
+          <div className="hud-panel-left">
+            <div className="slide-in-left stagger-1">
+              <VitaminDWidget />
+            </div>
+            <div className="slide-in-left stagger-2">
+              <BlinkRateWidget />
+            </div>
+          </div>
+        )}
+
+        {/* RIGHT PANEL: Schedule + extras */}
+        {showWidgets && (
+          <div className="hud-panel-right">
+            <div className="slide-in-right stagger-1">
+              <ScheduleWidget />
+            </div>
+          </div>
+        )}
+
+        {/* BOTTOM: Agent panel */}
+        <div className="hud-bottom">
+          <AgentPanel />
+        </div>
+      </div>
 
       {/* Toasts */}
       <ToastContainer />
 
-      {/* Health Widgets */}
-      {showWidgets && (
-        <div className="slide-up scroll-area" style={{ position: "absolute", top: 90, left: 16, right: 16, zIndex: 50, pointerEvents: "none" }}>
-          <VitaminDWidget />
-          <BlinkRateWidget />
-          <ScheduleWidget />
-        </div>
-      )}
-
-      {/* Agent Panel */}
-      <AgentPanel />
-
-      {/* Settings */}
+      {/* Settings modal */}
       <SettingsPanel visible={showSettings} onClose={() => setShowSettings(false)} />
 
-      {/* Drop zone */}
+      {/* PDF Drop zone */}
       {isDragging && (
         <div style={{
           position: "absolute", inset: 0,
-          background: "rgba(120, 200, 255, 0.06)",
-          border: "2px dashed rgba(120, 200, 255, 0.35)",
-          borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(var(--holo-primary-rgb), 0.04)",
+          border: "1px dashed rgba(var(--holo-primary-rgb), 0.3)",
+          borderRadius: 16,
+          display: "flex", alignItems: "center", justifyContent: "center",
           zIndex: 200, pointerEvents: "none",
         }}>
           <div className="scale-in" style={{ textAlign: "center" }}>
-            <p style={{ color: "rgba(120, 200, 255, 0.9)", fontSize: 15, fontWeight: 500, marginBottom: 4 }}>
+            <p style={{ color: "var(--holo-primary)", fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
               Soltar PDF para análise clínica
             </p>
-            <p style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: 11 }}>
-              Gemini extrai Vitamina D, Zinco, Cortisol, TSH e mais
+            <p style={{ color: "var(--holo-text-dim)", fontSize: 10 }}>
+              Gemini extrai Vitamina D, Zinco, Cortisol, TSH
             </p>
           </div>
         </div>
       )}
+
+      {/* Drag region for window move */}
+      <div
+        data-tauri-drag-region
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 28, zIndex: 1000 }}
+      />
     </div>
   );
 }

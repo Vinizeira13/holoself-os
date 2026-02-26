@@ -16,10 +16,8 @@ export function AgentPanel() {
 
   if (isLoading) {
     return (
-      <div style={{ position: "absolute", bottom: 24, left: 16, right: 16, zIndex: 50 }}>
-        <div className="holo-card" style={{ padding: "14px 18px" }}>
-          <LoadingSkeleton count={2} height={14} />
-        </div>
+      <div className="holo-card" style={{ padding: "12px 16px" }}>
+        <LoadingSkeleton count={2} height={14} />
       </div>
     );
   }
@@ -57,17 +55,8 @@ export function AgentPanel() {
   };
 
   return (
-    <div
-      className="slide-up"
-      style={{
-        position: "absolute",
-        bottom: 24,
-        left: 16,
-        right: 16,
-        zIndex: 50,
-      }}
-    >
-      <div className="holo-card" style={{ padding: "14px 18px" }}>
+    <div className="slide-up">
+      <div className="holo-card" style={{ padding: "12px 16px" }}>
         {/* Category indicator */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <div

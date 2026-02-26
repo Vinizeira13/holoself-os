@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconCalendar } from "../hud/Icons";
 
 interface ExamItem {
   id: number;
@@ -20,42 +21,26 @@ export function ScheduleWidget() {
     try {
       if (typeof window.__TAURI__ !== "undefined") {
         const { invoke } = await import("@tauri-apps/api/core");
-
-        // First generate schedule based on current data
         const generated = await invoke<Array<{
-          exam_type: string;
-          reason: string;
-          scheduled_date: string;
-          triggered_by: string;
+          exam_type: string; reason: string; scheduled_date: string; triggered_by: string;
         }>>("get_exam_schedule");
-
-        // Then get saved upcoming exams
         const upcoming = await invoke<Array<[number, string, string, string, boolean]>>("get_upcoming_exams");
 
         const items: ExamItem[] = upcoming.map(([id, exam_type, reason, scheduled_date, completed]) => ({
           id, exam_type, reason, scheduled_date, completed,
         }));
 
-        // Add generated ones that aren't already saved
         for (const gen of generated) {
-          const exists = items.some(i => i.exam_type === gen.exam_type);
-          if (!exists) {
-            items.push({
-              id: 0,
-              exam_type: gen.exam_type,
-              reason: gen.reason,
-              scheduled_date: gen.scheduled_date,
-              completed: false,
-            });
+          if (!items.some(i => i.exam_type === gen.exam_type)) {
+            items.push({ id: 0, exam_type: gen.exam_type, reason: gen.reason, scheduled_date: gen.scheduled_date, completed: false });
           }
         }
-
         setExams(items);
       } else {
-        // Mock for dev
         setExams([
-          { id: 1, exam_type: "vitamin_d_panel", reason: "Check trimestral Vitamina D", scheduled_date: "2026-03-08", completed: false },
-          { id: 2, exam_type: "zinc_copper_panel", reason: "Rácio Zinco/Cobre pós-Winfit", scheduled_date: "2026-03-15", completed: false },
+          { id: 1, exam_type: "vitamin_d_panel", reason: "Check trimestral", scheduled_date: "2026-03-08", completed: false },
+          { id: 2, exam_type: "zinc_copper_panel", reason: "Rácio pós-Winfit", scheduled_date: "2026-03-15", completed: false },
+          { id: 3, exam_type: "thyroid_panel", reason: "TSH semestral", scheduled_date: "2026-04-20", completed: false },
         ]);
       }
     } catch (err) {
@@ -65,60 +50,73 @@ export function ScheduleWidget() {
 
   if (exams.length === 0) return null;
 
-  const examTypeLabels: Record<string, string> = {
-    vitamin_d_panel: "Vitamina D",
-    zinc_copper_panel: "Zinco / Cobre",
-    autoimmune_panel: "Autoimune (ANA)",
-    magnesium_cortisol_panel: "Magnésio / Cortisol",
-    iron_panel: "Ferro / Ferritina",
-    thyroid_panel: "Tiroide (TSH)",
+  const labels: Record<string, string> = {
+    vitamin_d_panel: "Vit D",
+    zinc_copper_panel: "Zn/Cu",
+    autoimmune_panel: "ANA",
+    magnesium_cortisol_panel: "Mg/Cortisol",
+    iron_panel: "Fe/Ferritina",
+    thyroid_panel: "TSH",
   };
 
-  const visible = expanded ? exams : exams.slice(0, 2);
+  const visible = expanded ? exams : exams.slice(0, 3);
 
   return (
-    <div className="holo-card fade-in" style={{ padding: "12px 16px" }}>
+    <div className="holo-card" style={{ padding: "10px 14px" }}>
       <div
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, cursor: "pointer", pointerEvents: "auto" }}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, cursor: "pointer", pointerEvents: "auto" }}
         onClick={() => setExpanded(!expanded)}
       >
-        <span style={labelStyle}>Exames Agendados</span>
-        <span style={{ fontSize: 10, color: "rgba(120, 200, 255, 0.6)" }}>
-          {exams.length} {expanded ? "▲" : "▼"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <IconCalendar size={10} />
+          <span className="holo-label">Exames</span>
+        </div>
+        <span className="holo-label">{exams.length}</span>
       </div>
 
-      {visible.map((exam, i) => (
-        <div key={exam.id || i} style={{ marginBottom: i < visible.length - 1 ? 10 : 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 12, color: "rgba(255, 255, 255, 0.85)" }}>
-              {examTypeLabels[exam.exam_type] || exam.exam_type}
-            </span>
-            <span style={{ fontSize: 10, color: "rgba(120, 200, 255, 0.6)" }}>
-              {formatDate(exam.scheduled_date)}
-            </span>
+      {visible.map((exam, i) => {
+        const daysUntil = Math.ceil((new Date(exam.scheduled_date).getTime() - Date.now()) / 86400000);
+        const urgentColor = daysUntil < 7 ? "var(--holo-warn)" : daysUntil < 14 ? "var(--holo-primary)" : "var(--holo-text-dim)";
+
+        return (
+          <div
+            key={exam.id || i}
+            style={{
+              padding: "6px 8px",
+              marginBottom: i < visible.length - 1 ? 4 : 0,
+              borderLeft: `2px solid ${urgentColor}`,
+              background: "rgba(var(--holo-primary-rgb), 0.02)",
+              borderRadius: "0 4px 4px 0",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--holo-text)", fontWeight: 500 }}>
+                {labels[exam.exam_type] || exam.exam_type}
+              </span>
+              <span style={{ fontSize: 9, color: urgentColor, fontFamily: "inherit" }}>
+                {daysUntil > 0 ? `${daysUntil}d` : "Hoje"}
+              </span>
+            </div>
+            <p style={{ fontSize: 9, color: "var(--holo-text-muted)", marginTop: 1 }}>
+              {exam.reason}
+            </p>
           </div>
-          <p style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.4)", marginTop: 2, lineHeight: 1.4 }}>
-            {exam.reason}
-          </p>
-        </div>
-      ))}
+        );
+      })}
+
+      {exams.length > 3 && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          style={{
+            marginTop: 6, width: "100%", padding: "4px",
+            background: "none", border: "none",
+            color: "var(--holo-text-dim)", fontSize: 9,
+            cursor: "pointer", letterSpacing: "0.06em",
+          }}
+        >
+          +{exams.length - 3} mais
+        </button>
+      )}
     </div>
   );
 }
-
-function formatDate(date: string): string {
-  try {
-    const d = new Date(date);
-    return d.toLocaleDateString("pt-PT", { day: "numeric", month: "short" });
-  } catch {
-    return date;
-  }
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 9,
-  textTransform: "uppercase",
-  letterSpacing: "0.12em",
-  color: "rgba(255, 255, 255, 0.4)",
-};

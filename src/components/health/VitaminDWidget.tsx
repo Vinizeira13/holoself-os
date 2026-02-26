@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { LoadingSkeleton } from "../hud/LoadingSkeleton";
+import { IconSun } from "../hud/Icons";
 
 interface VitDData {
   uv_index: number;
@@ -14,7 +15,6 @@ export function VitaminDWidget() {
 
   useEffect(() => {
     fetchVitD();
-    // Refresh every 2 hours
     const interval = setInterval(fetchVitD, 2 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -27,13 +27,12 @@ export function VitaminDWidget() {
         const rec = await invoke<VitDData>("get_vitamin_d_recommendation", { uvIndex: uv });
         setData(rec);
       } else {
-        // Mock for dev
         setData({
           uv_index: 3,
           optimal_minutes: 25,
           d3_iu_supplement: 2000,
           best_window: "11:00 - 14:00",
-          note: "UV moderado (3). 25 minutos de exposição solar diária.",
+          note: "UV moderado. 25 min exposição.",
         });
       }
     } catch (err) {
@@ -42,65 +41,59 @@ export function VitaminDWidget() {
   };
 
   if (!data) return (
-    <div className="holo-card" style={{ padding: "12px 16px", marginBottom: 8 }}>
-      <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(255,255,255,0.4)" }}>Vitamina D</span>
-      <div style={{ marginTop: 8 }}><LoadingSkeleton count={2} height={16} /></div>
+    <div className="holo-card" style={{ padding: "10px 14px" }}>
+      <span className="holo-label">Vitamina D</span>
+      <div style={{ marginTop: 6 }}><LoadingSkeleton count={2} height={14} /></div>
     </div>
   );
 
   const uvColor = data.uv_index < 3
-    ? "rgba(180, 140, 255, 0.8)"
+    ? "var(--holo-secondary)"
     : data.uv_index < 6
-      ? "rgba(120, 200, 255, 0.8)"
-      : "rgba(100, 255, 180, 0.8)";
+      ? "var(--holo-primary)"
+      : "var(--holo-accent)";
 
   return (
-    <div className="holo-card fade-in" style={{ padding: "12px 16px", marginBottom: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={labelStyle}>Vitamina D</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: uvColor, boxShadow: `0 0 6px ${uvColor}` }} />
-          <span style={{ fontSize: 11, color: uvColor }}>UV {data.uv_index.toFixed(0)}</span>
+    <div className="holo-card" style={{ padding: "10px 14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span className="holo-label">Vitamina D</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <IconSun size={10} />
+          <span style={{ fontSize: 10, color: uvColor, fontWeight: 500 }}>UV {data.uv_index.toFixed(0)}</span>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+      {/* Metrics row */}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
         <div>
-          <span style={valueStyle}>{data.optimal_minutes}</span>
-          <span style={unitStyle}>min sol</span>
+          <span className="holo-metric holo-glow" style={{ color: uvColor, fontSize: 24 }}>
+            {data.optimal_minutes}
+          </span>
+          <span className="holo-label" style={{ display: "block", marginTop: 2 }}>min sol</span>
         </div>
         {data.d3_iu_supplement > 0 && (
           <div>
-            <span style={valueStyle}>{data.d3_iu_supplement}</span>
-            <span style={unitStyle}>IU/dia</span>
+            <span style={{ fontSize: 16, fontWeight: 200, color: "var(--holo-text)" }}>
+              {data.d3_iu_supplement}
+            </span>
+            <span className="holo-label" style={{ display: "block", marginTop: 2 }}>IU/dia</span>
           </div>
         )}
-        <div>
-          <span style={{ ...valueStyle, fontSize: 12 }}>{data.best_window}</span>
-          <span style={unitStyle}>janela</span>
-        </div>
+      </div>
+
+      {/* Time window */}
+      <div style={{
+        marginTop: 8,
+        padding: "4px 8px",
+        background: "rgba(var(--holo-primary-rgb), 0.04)",
+        borderRadius: 4,
+        borderLeft: `2px solid ${uvColor}`,
+      }}>
+        <span style={{ fontSize: 10, color: "var(--holo-text-dim)" }}>
+          {data.best_window}
+        </span>
       </div>
     </div>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 9,
-  textTransform: "uppercase",
-  letterSpacing: "0.12em",
-  color: "rgba(255, 255, 255, 0.4)",
-};
-
-const valueStyle: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 300,
-  color: "rgba(255, 255, 255, 0.9)",
-  display: "block",
-};
-
-const unitStyle: React.CSSProperties = {
-  fontSize: 9,
-  color: "rgba(255, 255, 255, 0.4)",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-};
