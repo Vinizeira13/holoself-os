@@ -4,6 +4,7 @@ use std::process::Command;
 /// Uses "Luciana" voice (PT-BR) — built-in, zero API keys needed
 /// Returns WAV audio bytes that can be played by the frontend AudioContext
 
+#[allow(dead_code)]
 pub fn is_available() -> bool {
     Command::new("which")
         .arg("say")
