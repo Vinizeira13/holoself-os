@@ -26,11 +26,12 @@ fn find_whisper_binary() -> Result<PathBuf> {
         }
     }
 
-    // 2. Check common locations (including cmake build output)
+    // 2. Check common locations
     let home = dirs::home_dir().unwrap_or_default();
     let search_dirs = vec![
-        home.join("whisper.cpp/build/bin"), // cmake build output (current)
-        home.join("whisper.cpp"),            // legacy Makefile build
+        home.join(".holoself/bin"),           // HoloSelf auto-installed
+        home.join("whisper.cpp/build/bin"),   // cmake build output
+        home.join("whisper.cpp"),             // legacy Makefile build
         home.join(".local/bin"),
         PathBuf::from("/usr/local/bin"),
         PathBuf::from("/opt/homebrew/bin"),
@@ -58,10 +59,7 @@ fn find_whisper_binary() -> Result<PathBuf> {
     }
 
     bail!(
-        "whisper.cpp binary not found. Install it:\n\
-         1. git clone https://github.com/ggerganov/whisper.cpp\n\
-         2. cd whisper.cpp && make\n\
-         3. export WHISPER_CPP_PATH=/path/to/whisper-cli"
+        "Motor de transcrição não encontrado. Abra as configurações e execute a instalação automática."
     )
 }
 
@@ -87,6 +85,7 @@ fn find_model() -> Result<PathBuf> {
     ];
 
     let model_dirs = vec![
+        home.join(".holoself/models"),       // HoloSelf auto-installed
         home.join("whisper.cpp/models"),
         home.join(".local/share/whisper"),
         home.join("Models"),
@@ -102,8 +101,7 @@ fn find_model() -> Result<PathBuf> {
     }
 
     bail!(
-        "Whisper model not found. Download it:\n\
-         cd whisper.cpp && bash ./models/download-ggml-model.sh base"
+        "Modelo de voz não encontrado. Abra as configurações e execute a instalação automática."
     )
 }
 

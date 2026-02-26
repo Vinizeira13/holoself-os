@@ -76,17 +76,40 @@ export function SetupWizard({ onComplete }: Props) {
   const installWhisper = useCallback(async () => {
     if (!isTauri) return;
     setWhisperInstalling(true);
-    setWhisperProgress("A clonar whisper.cpp...");
+    setWhisperProgress("A preparar componentes de voz...");
     setError(null);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      setWhisperProgress("A compilar e descarregar modelo (~1.6GB)... pode demorar 2-5min");
+
+      // Show progressive messages so user knows it's working
+      const stages = [
+        "A baixar motor de transcrição...",
+        "A baixar conversor de áudio...",
+        "A baixar modelo de voz (~1.6GB)...\nIsto pode demorar 2-5 minutos dependendo da sua internet.",
+      ];
+      let stageIdx = 0;
+      const stageTimer = setInterval(() => {
+        stageIdx++;
+        if (stageIdx < stages.length) {
+          setWhisperProgress(stages[stageIdx]);
+        }
+      }, 8000); // advance message every 8s
+
+      setWhisperProgress(stages[0]);
       await invoke("install_whisper_auto");
-      setWhisperProgress("Instalado com sucesso!");
+
+      clearInterval(stageTimer);
+      setWhisperProgress("Tudo pronto! ✓");
       await checkStatus();
-      setTimeout(() => setStep("permissions"), 1000);
+      setTimeout(() => setStep("permissions"), 1200);
     } catch (err) {
-      setError(`Falha na instalação: ${String(err)}`);
+      const msg = String(err);
+      // User-friendly error — no terminal commands
+      if (msg.includes("conexão") || msg.includes("download") || msg.includes("curl")) {
+        setError("Sem conexão à internet. Verifique sua rede e tente novamente.");
+      } else {
+        setError("Não foi possível instalar automaticamente. Tente novamente ou pule este passo.");
+      }
       setWhisperProgress("");
     } finally {
       setWhisperInstalling(false);
@@ -176,6 +199,13 @@ export function SetupWizard({ onComplete }: Props) {
 
   return (
     <div style={cardStyle}>
+      {/* Indeterminate progress bar animation */}
+      <style>{`
+        @keyframes indeterminate {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(400%); }
+        }
+      `}</style>
       <div style={panelStyle}>
         {progressBar}
 
@@ -336,33 +366,44 @@ export function SetupWizard({ onComplete }: Props) {
                   onClick={installWhisper}
                   disabled={whisperInstalling}
                 >
-                  {whisperInstalling ? "INSTALANDO..." : "INSTALAR AUTOMATICAMENTE"}
+                  {whisperInstalling ? "INSTALANDO..." : "INSTALAR COM UM CLIQUE"}
                 </button>
 
                 {whisperProgress && (
-                  <div style={{ fontSize: 11, color: "#00ff88", marginTop: 8, lineHeight: 1.5 }}>
+                  <div style={{
+                    fontSize: 11, color: "#00ff88", marginTop: 12, lineHeight: 1.7,
+                    padding: "10px 14px", background: "rgba(0,255,136,0.04)",
+                    borderRadius: 6, border: "1px solid rgba(0,255,136,0.1)",
+                    whiteSpace: "pre-line",
+                  }}>
                     {whisperProgress}
                   </div>
                 )}
 
-                <details style={{ marginTop: 16 }}>
-                  <summary style={{ fontSize: 10, color: "rgba(200,214,229,0.4)", cursor: "pointer" }}>
-                    Instruções manuais (se a instalação automática falhar)
-                  </summary>
-                  <pre style={{
-                    fontSize: 10, color: "#00ff88", lineHeight: 1.8, margin: "8px 0 0",
-                    whiteSpace: "pre-wrap", wordBreak: "break-all",
-                    padding: 12, background: "rgba(0,0,0,0.3)", borderRadius: 6,
+                {whisperInstalling && (
+                  <div style={{
+                    marginTop: 10, height: 3, borderRadius: 2,
+                    background: "rgba(255,255,255,0.08)", overflow: "hidden",
                   }}>
-{`git clone https://github.com/ggerganov/whisper.cpp
-cd whisper.cpp && make
-bash ./models/download-ggml-model.sh large-v3-turbo`}
-                  </pre>
-                </details>
+                    <div style={{
+                      height: "100%", background: "#00ff88", borderRadius: 2,
+                      animation: "indeterminate 1.5s ease-in-out infinite",
+                      width: "30%",
+                    }} />
+                  </div>
+                )}
+
+                <p style={{ fontSize: 9, color: "rgba(200,214,229,0.3)", marginTop: 10 }}>
+                  Tudo é baixado automaticamente. Nenhuma ação manual necessária.
+                </p>
               </>
             ) : (
-              <div style={{ fontSize: 12, color: "#00ff88", marginTop: 8, fontWeight: 600 }}>
-                Whisper.cpp instalado e pronto!
+              <div style={{
+                fontSize: 12, color: "#00ff88", marginTop: 8, fontWeight: 600,
+                padding: "10px 14px", background: "rgba(0,255,136,0.06)",
+                borderRadius: 6, border: "1px solid rgba(0,255,136,0.15)",
+              }}>
+                ✓ Componentes de voz instalados e prontos!
               </div>
             )}
 

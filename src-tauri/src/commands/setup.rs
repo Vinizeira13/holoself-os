@@ -80,32 +80,40 @@ pub async fn save_api_keys(
     Ok(())
 }
 
-/// Auto-install whisper.cpp (download pre-built binary + model)
+/// Auto-install whisper.cpp + ffmpeg (download pre-built binaries + model)
+/// No compilation, no terminal, no dev tools needed.
 #[tauri::command]
 pub async fn install_whisper_auto() -> Result<String, String> {
-    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
-    let whisper_dir = home.join("whisper.cpp");
-    std::fs::create_dir_all(&whisper_dir).map_err(|e| format!("Cannot create dir: {}", e))?;
+    let home = dirs::home_dir().ok_or("Não foi possível encontrar a pasta do utilizador")?;
+    let holoself_dir = home.join(".holoself");
+    std::fs::create_dir_all(&holoself_dir).map_err(|e| format!("Erro ao criar pasta: {}", e))?;
 
-    // Step 1: Get the whisper-cli binary
-    let bin_dir = whisper_dir.join("build").join("bin");
-    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("Cannot create bin dir: {}", e))?;
-    let binary_path = bin_dir.join("whisper-cli");
+    let bin_dir = holoself_dir.join("bin");
+    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("Erro ao criar pasta: {}", e))?;
 
-    if !binary_path.exists() {
-        // Strategy 1: Try brew install (fastest, handles updates)
-        if try_brew_install_whisper(&binary_path) {
-            log::info!("whisper-cli installed via Homebrew symlink");
-        }
-        // Strategy 2: Download pre-built binary from GitHub releases
-        else if !binary_path.exists() {
-            download_whisper_binary(&binary_path)?;
+    // === Step 1: whisper-cli binary ===
+    let whisper_path = bin_dir.join("whisper-cli");
+    if !whisper_path.exists() {
+        // Try brew first (if user has it), else download pre-built
+        if !try_brew_install_whisper(&whisper_path) {
+            download_whisper_binary(&whisper_path)?;
         }
     }
 
-    // Step 2: Download model (large-v3-turbo for best PT-BR, fallback to base)
-    let models_dir = whisper_dir.join("models");
-    std::fs::create_dir_all(&models_dir).map_err(|e| format!("Cannot create models dir: {}", e))?;
+    // === Step 2: ffmpeg binary (needed for audio conversion) ===
+    let ffmpeg_path = bin_dir.join("ffmpeg");
+    if !ffmpeg_path.exists() {
+        // Check if ffmpeg already in PATH
+        let in_path = Command::new("which").arg("ffmpeg").output()
+            .map(|o| o.status.success()).unwrap_or(false);
+        if !in_path {
+            download_ffmpeg_binary(&ffmpeg_path)?;
+        }
+    }
+
+    // === Step 3: Whisper model ===
+    let models_dir = holoself_dir.join("models");
+    std::fs::create_dir_all(&models_dir).map_err(|e| format!("Erro ao criar pasta: {}", e))?;
 
     let turbo_path = models_dir.join("ggml-large-v3-turbo.bin");
     let base_path = models_dir.join("ggml-base.bin");
@@ -115,7 +123,7 @@ pub async fn install_whisper_auto() -> Result<String, String> {
     } else if base_path.exists() {
         base_path.clone()
     } else {
-        // Download from HuggingFace (direct link, no script needed)
+        // Download from HuggingFace (direct link)
         let turbo_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin";
         log::info!("Downloading large-v3-turbo model (~1.6GB)...");
 
@@ -124,14 +132,14 @@ pub async fn install_whisper_auto() -> Result<String, String> {
             .arg(&turbo_path)
             .arg(turbo_url)
             .output()
-            .map_err(|e| format!("Model download failed: {}", e))?;
+            .map_err(|e| format!("Falha no download: {}", e))?;
 
         if dl.status.success() && turbo_path.exists() {
             turbo_path.clone()
         } else {
-            // Fallback to base model (~142MB, much faster download)
-            log::warn!("large-v3-turbo download failed, trying base model...");
-            let _ = std::fs::remove_file(&turbo_path); // cleanup partial download
+            // Fallback: base model (~142MB, much faster)
+            log::warn!("large-v3-turbo failed, trying base model...");
+            let _ = std::fs::remove_file(&turbo_path);
 
             let base_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
             let dl_base = Command::new("curl")
@@ -139,13 +147,12 @@ pub async fn install_whisper_auto() -> Result<String, String> {
                 .arg(&base_path)
                 .arg(base_url)
                 .output()
-                .map_err(|e| format!("Model download failed: {}", e))?;
+                .map_err(|e| format!("Falha no download: {}", e))?;
 
             if !dl_base.status.success() {
                 let _ = std::fs::remove_file(&base_path);
                 return Err(
-                    "Falha ao baixar modelo. Verifique sua conexão.\n\
-                     Download manual: https://huggingface.co/ggerganov/whisper.cpp".to_string()
+                    "Não foi possível baixar o modelo de voz. Verifique sua conexão à internet e tente novamente.".to_string()
                 );
             }
             base_path.clone()
@@ -153,16 +160,13 @@ pub async fn install_whisper_auto() -> Result<String, String> {
     };
 
     // Set env vars for this session
-    let binary = find_whisper_binary_in(&whisper_dir);
-    if let Some(bin) = &binary {
-        std::env::set_var("WHISPER_CPP_PATH", bin);
-    }
+    std::env::set_var("WHISPER_CPP_PATH", &whisper_path);
     std::env::set_var("WHISPER_MODEL_PATH", &model_path);
+    if ffmpeg_path.exists() {
+        std::env::set_var("HOLOSELF_FFMPEG_PATH", &ffmpeg_path);
+    }
 
-    Ok(format!(
-        "Whisper.cpp installed at {}",
-        whisper_dir.display()
-    ))
+    Ok("Componentes de voz instalados com sucesso!".to_string())
 }
 
 // === Helpers ===
@@ -193,11 +197,13 @@ fn find_whisper_binary() -> Option<PathBuf> {
     }
 
     let home = dirs::home_dir()?;
-    let whisper_dir = home.join("whisper.cpp");
 
-    // Check common locations
-    if let Some(bin) = find_whisper_binary_in(&whisper_dir) {
-        return Some(bin);
+    // Check HoloSelf directory first, then legacy whisper.cpp
+    for dir_name in &[".holoself", "whisper.cpp"] {
+        let dir = home.join(dir_name);
+        if let Some(bin) = find_whisper_binary_in(&dir) {
+            return Some(bin);
+        }
     }
 
     // Check PATH
@@ -216,16 +222,16 @@ fn find_whisper_binary() -> Option<PathBuf> {
 }
 
 fn find_whisper_binary_in(dir: &PathBuf) -> Option<PathBuf> {
-    // Check cmake build output first (build/bin/whisper-cli)
-    let cmake_bins = [
-        dir.join("build/bin/whisper-cli"),
-        dir.join("build/bin/main"),
-    ];
-    for bin in &cmake_bins {
-        if bin.exists() { return Some(bin.clone()); }
+    // Check bin/ directory (HoloSelf standard location)
+    let bin_dir_names = ["bin", "build/bin"];
+    for bd in &bin_dir_names {
+        for name in &["whisper-cli", "main"] {
+            let bin = dir.join(bd).join(name);
+            if bin.exists() { return Some(bin); }
+        }
     }
 
-    // Legacy: root-level binaries (old Makefile build)
+    // Root-level binaries (legacy)
     for name in &["whisper-cli", "main"] {
         let bin = dir.join(name);
         if bin.exists() { return Some(bin); }
@@ -277,88 +283,101 @@ fn try_brew_install_whisper(target: &PathBuf) -> bool {
 fn download_whisper_binary(target: &PathBuf) -> Result<(), String> {
     log::info!("Downloading pre-built whisper-cli binary...");
 
-    // Detect architecture
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x86_64" };
 
-    // Use GitHub API to find latest release with macOS binary
-    // Direct download from latest known release (v1.7.5+)
-    let release_url = format!(
-        "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-cli-bin-macos-{}.zip",
-        arch
-    );
+    // Try multiple URL patterns (GitHub release naming varies between versions)
+    let urls = vec![
+        format!("https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-cli-bin-macos-{}.zip", arch),
+        format!("https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-v1.7.5-bin-macos-{}.zip", arch),
+    ];
 
     let tmp_zip = target.parent().unwrap().join("whisper-cli.zip");
 
-    // Download with curl (always available on macOS)
-    let dl = Command::new("curl")
-        .args(["-L", "-f", "-o"])
-        .arg(&tmp_zip)
-        .arg(&release_url)
-        .output()
-        .map_err(|e| format!("Download failed: {}", e))?;
-
-    if !dl.status.success() {
-        // Try alternative URL format
-        let alt_url = format!(
-            "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-v1.7.5-bin-macos-{}.zip",
-            arch
-        );
-        let dl2 = Command::new("curl")
-            .args(["-L", "-f", "-o"])
+    let mut downloaded = false;
+    for url in &urls {
+        let dl = Command::new("curl")
+            .args(["-L", "-f", "-s", "-o"])
             .arg(&tmp_zip)
-            .arg(&alt_url)
-            .output()
-            .map_err(|e| format!("Download failed: {}", e))?;
+            .arg(url)
+            .output();
 
-        if !dl2.status.success() {
-            let _ = std::fs::remove_file(&tmp_zip);
-            return Err(format!(
-                "Não foi possível baixar o binário. Instale manualmente:\n\
-                 brew install whisper-cpp\n\
-                 ou visite: https://github.com/ggerganov/whisper.cpp/releases"
-            ));
+        if let Ok(out) = dl {
+            if out.status.success() && tmp_zip.exists() {
+                downloaded = true;
+                break;
+            }
         }
     }
 
-    // Unzip
+    if !downloaded {
+        let _ = std::fs::remove_file(&tmp_zip);
+        return Err(
+            "Não foi possível baixar o motor de transcrição. Verifique sua conexão à internet e tente novamente.".to_string()
+        );
+    }
+
+    // Extract
+    extract_binary_from_zip(&tmp_zip, target, &["whisper-cli", "main"])?;
+    Ok(())
+}
+
+/// Download static ffmpeg binary (needed for audio format conversion)
+fn download_ffmpeg_binary(target: &PathBuf) -> Result<(), String> {
+    log::info!("Downloading static ffmpeg binary...");
+
+    let tmp_zip = target.parent().unwrap().join("ffmpeg.zip");
+
+    // evermeet.cx hosts reliable macOS static builds
+    let url = "https://evermeet.cx/ffmpeg/getrelease/zip";
+    let dl = Command::new("curl")
+        .args(["-L", "-f", "-s", "-o"])
+        .arg(&tmp_zip)
+        .arg(url)
+        .output()
+        .map_err(|e| format!("Download ffmpeg falhou: {}", e))?;
+
+    if !dl.status.success() || !tmp_zip.exists() {
+        let _ = std::fs::remove_file(&tmp_zip);
+        // Not critical — afconvert (built-in macOS) can handle some formats
+        log::warn!("ffmpeg download failed, will rely on afconvert fallback");
+        return Ok(());
+    }
+
+    extract_binary_from_zip(&tmp_zip, target, &["ffmpeg"])?;
+    Ok(())
+}
+
+/// Extract a named binary from a zip file into target path
+fn extract_binary_from_zip(zip_path: &PathBuf, target: &PathBuf, names: &[&str]) -> Result<(), String> {
     let unzip_dir = target.parent().unwrap().join("_unzip_tmp");
     let _ = std::fs::remove_dir_all(&unzip_dir);
+
     let unzip = Command::new("unzip")
         .args(["-o", "-q"])
-        .arg(&tmp_zip)
+        .arg(zip_path)
         .arg("-d")
         .arg(&unzip_dir)
         .output()
-        .map_err(|e| format!("Unzip failed: {}", e))?;
+        .map_err(|e| format!("Erro ao descompactar: {}", e))?;
 
-    let _ = std::fs::remove_file(&tmp_zip);
+    let _ = std::fs::remove_file(zip_path);
 
     if !unzip.status.success() {
         let _ = std::fs::remove_dir_all(&unzip_dir);
-        return Err("Falha ao descompactar binário".to_string());
+        return Err("Erro ao descompactar ficheiro".to_string());
     }
 
-    // Find the whisper-cli binary in unzipped contents
-    let found = find_file_recursive(&unzip_dir, "whisper-cli");
-    if let Some(bin) = found {
-        std::fs::copy(&bin, target).map_err(|e| format!("Failed to copy binary: {}", e))?;
-        // Make executable
-        let _ = Command::new("chmod").arg("+x").arg(target).output();
-        let _ = std::fs::remove_dir_all(&unzip_dir);
-        return Ok(());
-    }
-
-    // Try "main" binary name (older releases)
-    let found_main = find_file_recursive(&unzip_dir, "main");
-    if let Some(bin) = found_main {
-        std::fs::copy(&bin, target).map_err(|e| format!("Failed to copy binary: {}", e))?;
-        let _ = Command::new("chmod").arg("+x").arg(target).output();
-        let _ = std::fs::remove_dir_all(&unzip_dir);
-        return Ok(());
+    for name in names {
+        if let Some(bin) = find_file_recursive(&unzip_dir, name) {
+            std::fs::copy(&bin, target).map_err(|e| format!("Erro ao copiar: {}", e))?;
+            let _ = Command::new("chmod").arg("+x").arg(target).output();
+            let _ = std::fs::remove_dir_all(&unzip_dir);
+            return Ok(());
+        }
     }
 
     let _ = std::fs::remove_dir_all(&unzip_dir);
-    Err("Binário whisper-cli não encontrado no download".to_string())
+    Err("Ficheiro não encontrado no download".to_string())
 }
 
 /// Recursively find a file by name in a directory
@@ -390,6 +409,7 @@ fn find_whisper_model() -> Option<PathBuf> {
 
     // Search common model locations
     let dirs_to_check = [
+        home.join(".holoself/models"),
         home.join("whisper.cpp/models"),
         home.join(".local/share/whisper"),
         home.join("Models"),

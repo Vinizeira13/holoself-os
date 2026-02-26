@@ -90,14 +90,16 @@ pub async fn save_temp_audio(
 
     match converted {
         Ok(()) => Ok(wav_path.to_string_lossy().to_string()),
-        Err(e) => Err(format!("Audio conversion failed: {}. Ensure ffmpeg or afconvert is available.", e)),
+        Err(e) => Err(format!("Falha na conversão de áudio: {}", e)),
     }
 }
 
-/// Convert audio file to WAV 16kHz mono PCM16 using ffmpeg (cross-platform) or afconvert (macOS)
+/// Convert audio file to WAV 16kHz mono PCM16
 fn convert_to_wav(input: &std::path::Path, output: &std::path::Path) -> Result<(), String> {
-    // Try ffmpeg first (cross-platform, handles WebM/Opus natively)
-    let ffmpeg = std::process::Command::new("ffmpeg")
+    // Find ffmpeg: HoloSelf bundled → PATH
+    let ffmpeg_bin = find_ffmpeg();
+
+    let ffmpeg = std::process::Command::new(&ffmpeg_bin)
         .arg("-y")
         .arg("-i").arg(input)
         .arg("-ar").arg("16000")
@@ -132,7 +134,23 @@ fn convert_to_wav(input: &std::path::Path, output: &std::path::Path) -> Result<(
         return Err(format!("afconvert failed: {}", stderr));
     }
 
-    Err("Neither ffmpeg nor afconvert available".to_string())
+    Err("Conversor de áudio não encontrado. Execute a instalação automática novamente nas configurações.".to_string())
+}
+
+/// Find ffmpeg binary: HoloSelf bundled → env var → PATH
+fn find_ffmpeg() -> std::path::PathBuf {
+    // 1. Env var from setup
+    if let Ok(path) = std::env::var("HOLOSELF_FFMPEG_PATH") {
+        let p = std::path::PathBuf::from(&path);
+        if p.exists() { return p; }
+    }
+    // 2. Bundled in ~/.holoself/bin/
+    if let Some(home) = dirs::home_dir() {
+        let bundled = home.join(".holoself/bin/ffmpeg");
+        if bundled.exists() { return bundled; }
+    }
+    // 3. System PATH
+    std::path::PathBuf::from("ffmpeg")
 }
 
 /// Process voice command: transcribe + interpret via agent
