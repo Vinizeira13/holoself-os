@@ -1,6 +1,6 @@
 [package]
 name = "holoself-os"
-version = "0.1.0"
+version = "0.2.0"
 description = "HoloSelf OS — AI Health Agent with Holographic HUD"
 authors = ["Guilherme Rocha"]
 license = "MIT"
@@ -12,17 +12,17 @@ name = "holoself_os_lib"
 crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.10", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-shell = "2"
+tauri = { version = "2.10", features = ["tray-icon"] }
+tauri-plugin-shell = "2.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.13", features = ["json", "rustls-tls"], default-features = false }
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 dirs = "5"
