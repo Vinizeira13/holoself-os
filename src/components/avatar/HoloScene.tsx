@@ -1,24 +1,42 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Float, MeshDistortMaterial } from "@react-three/drei";
+import { Float, MeshDistortMaterial, Splat } from "@react-three/drei";
 import * as THREE from "three";
 
 /**
  * HoloScene — Jarvis-style holographic avatar
  *
- * Intense neon aesthetic with multiple light sources, double helix DNA,
- * expanding pulse rings, and orbiting data particles.
+ * When a .splat model exists at /avatar.splat, renders the user's
+ * photorealistic Gaussian Splatting face. Otherwise shows the
+ * procedural holographic orb with DNA helix.
  *
- * Future: Replace core orb with Gaussian Splatting
- * via @react-three/drei's Splat component
+ * To create your .splat avatar:
+ * 1. Download Luma AI app (iOS) or Polycam (iOS/Android)
+ * 2. Record a 360° video of your face/head
+ * 3. Export as .splat or .ply file
+ * 4. Place as public/avatar.splat in the project
  */
 
 interface HoloSceneProps {
   healthScore?: number;
   speaking?: boolean;
+  avatarSrc?: string;
 }
 
-export function HoloScene({ healthScore = 0.7, speaking = false }: HoloSceneProps) {
+export function HoloScene({ healthScore = 0.7, speaking = false, avatarSrc }: HoloSceneProps) {
+  const [hasSplat, setHasSplat] = useState(false);
+
+  // Check if avatar.splat exists
+  useEffect(() => {
+    if (avatarSrc) {
+      setHasSplat(true);
+      return;
+    }
+    // Try loading the default avatar
+    fetch("/avatar.splat", { method: "HEAD" })
+      .then((r) => setHasSplat(r.ok))
+      .catch(() => setHasSplat(false));
+  }, [avatarSrc]);
   const meshRef = useRef<THREE.Mesh>(null);
   const ring1Ref = useRef<THREE.Mesh>(null);
   const ring2Ref = useRef<THREE.Mesh>(null);
@@ -79,23 +97,35 @@ export function HoloScene({ healthScore = 0.7, speaking = false }: HoloSceneProp
       {/* Rim light for edge glow */}
       <pointLight position={[0, 0, -3]} intensity={0.8} color="#78c8ff" distance={8} decay={2} />
 
-      {/* Core holographic orb */}
-      <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.4}>
-        <mesh ref={meshRef} position={[0, 0, 0]}>
-          <sphereGeometry args={[0.55, 64, 64]} />
-          <MeshDistortMaterial
-            color={coreColor}
-            emissive={coreColor}
-            emissiveIntensity={0.6}
-            roughness={0.05}
-            metalness={0.9}
-            distort={speaking ? 0.3 : 0.18}
-            speed={speaking ? 5 : 2.5}
-            transparent
-            opacity={0.8}
-          />
-        </mesh>
-      </Float>
+      {/* AVATAR: Gaussian Splatting (if available) or procedural orb */}
+      {hasSplat ? (
+        <Float speed={0.8} rotationIntensity={0.05} floatIntensity={0.3}>
+          <group scale={[1.2, 1.2, 1.2]} position={[0, -0.2, 0]}>
+            <Splat
+              src={avatarSrc || "/avatar.splat"}
+              alphaTest={0.1}
+              toneMapped={false}
+            />
+          </group>
+        </Float>
+      ) : (
+        <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.4}>
+          <mesh ref={meshRef} position={[0, 0, 0]}>
+            <sphereGeometry args={[0.55, 64, 64]} />
+            <MeshDistortMaterial
+              color={coreColor}
+              emissive={coreColor}
+              emissiveIntensity={0.6}
+              roughness={0.05}
+              metalness={0.9}
+              distort={speaking ? 0.3 : 0.18}
+              speed={speaking ? 5 : 2.5}
+              transparent
+              opacity={0.8}
+            />
+          </mesh>
+        </Float>
+      )}
 
       {/* Inner glow core */}
       <mesh position={[0, 0, 0]}>

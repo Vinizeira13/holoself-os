@@ -10,6 +10,7 @@ import { VitaminDWidget } from "./components/health/VitaminDWidget";
 import { ScheduleWidget } from "./components/health/ScheduleWidget";
 import { BlinkRateWidget } from "./components/health/BlinkRateWidget";
 import { IconSettings, IconVolume, IconEye, IconEyeOff } from "./components/hud/Icons";
+import { JarvisHud } from "./components/hud/JarvisHud";
 import { useAgentStore } from "./stores/agentStore";
 import type { OcrResult } from "./types/health";
 
@@ -19,6 +20,13 @@ export default function App() {
   const [showWidgets, setShowWidgets] = useState(true);
   const fetchAgentMessage = useAgentStore((s) => s.fetchMessage);
   const toast = useToastStore((s) => s.add);
+
+  // Detect Tauri env for transparent background
+  useEffect(() => {
+    if (typeof window.__TAURI__ !== "undefined") {
+      document.documentElement.classList.add("tauri-env");
+    }
+  }, []);
 
   useEffect(() => {
     fetchAgentMessage();
@@ -86,6 +94,12 @@ export default function App() {
           </Suspense>
         </Canvas>
       </ErrorBoundary>
+
+      {/* Vignette darkens edges */}
+      <div className="hud-vignette" />
+
+      {/* Jarvis HUD overlay: brackets, lines, telemetry */}
+      <JarvisHud />
 
       {/* Scanline HUD effect */}
       <div className="hud-scanline" />
