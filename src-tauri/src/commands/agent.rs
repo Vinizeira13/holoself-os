@@ -70,49 +70,87 @@ const PROTOCOLS: &[Protocol] = &[
 pub async fn get_agent_message(
     state: State<'_, DbState>,
 ) -> Result<AgentMessage, String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
     let now = chrono::Local::now();
     let hour = now.hour();
     let today = now.format("%Y-%m-%d").to_string();
 
-    // Pre-fetch upcoming exams (used in multiple branches)
-    let upcoming_exams = db.get_upcoming_exams().unwrap_or_default();
+    // Scope block: all DB access happens here, lock is released before any .await
+    let (adherence_pct, taken_today, total, supplement_names, taken_names, pending_names, exam_context, early_return) = {
+        let db = state.0.lock().map_err(|e| e.to_string())?;
 
-    // 0. Check for recent voice input (last 30 seconds)
-    let voice_input: Option<String> = db.query_row(
-        "SELECT value FROM agent_memory WHERE key = 'voice_input' AND timestamp > datetime('now', '-30 seconds') ORDER BY rowid DESC LIMIT 1",
-        &[],
-        |row| row.get(0),
-    ).ok();
+        // Pre-fetch upcoming exams
+        let upcoming_exams = db.get_upcoming_exams().unwrap_or_default();
 
-    if let Some(ref input) = voice_input {
-        let lower = input.to_lowercase();
-        // Voice command processing
-        if lower.contains("status") || lower.contains("como estou") || lower.contains("relatório") {
-            return Ok(AgentMessage {
-                text: format!(
-                    "Relatório rápido: {} de {} suplementos hoje ({}%). {}",
-                    PROTOCOLS.iter().filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false)).count(),
-                    PROTOCOLS.len(),
-                    (PROTOCOLS.iter().filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false)).count() as f64 / PROTOCOLS.len() as f64 * 100.0) as u32,
-                    if !upcoming_exams.is_empty() {
-                        format!("Próximo exame: {} em {}.", upcoming_exams[0].1, upcoming_exams[0].3)
-                    } else {
-                        "Sem exames próximos.".to_string()
+        // 0. Check for recent voice input (last 30 seconds)
+        let voice_input: Option<String> = db.query_row(
+            "SELECT value FROM agent_memory WHERE key = 'voice_input' AND timestamp > datetime('now', '-30 seconds') ORDER BY rowid DESC LIMIT 1",
+            &[],
+            |row| row.get(0),
+        ).ok();
+
+        if let Some(ref input) = voice_input {
+            let lower = input.to_lowercase();
+            if lower.contains("status") || lower.contains("como estou") || lower.contains("relatório") {
+                let msg = AgentMessage {
+                    text: format!(
+                        "Relatório rápido: {} de {} suplementos hoje ({}%). {}",
+                        PROTOCOLS.iter().filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false)).count(),
+                        PROTOCOLS.len(),
+                        (PROTOCOLS.iter().filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false)).count() as f64 / PROTOCOLS.len() as f64 * 100.0) as u32,
+                        if !upcoming_exams.is_empty() {
+                            format!("Próximo exame: {} em {}.", upcoming_exams[0].1, upcoming_exams[0].3)
+                        } else {
+                            "Sem exames próximos.".to_string()
+                        }
+                    ),
+                    category: "voice_response".into(),
+                    priority: "high".into(),
+                    action: None,
+                };
+                return Ok(msg);
+            } else if lower.contains("tomei") || lower.contains("registar") || lower.contains("suplemento") {
+                for protocol in PROTOCOLS {
+                    if lower.contains(&protocol.name.to_lowercase()) {
+                        return Ok(AgentMessage {
+                            text: format!("Registando {} — {}.", protocol.name, protocol.dosage),
+                            category: "voice_response".into(),
+                            priority: "high".into(),
+                            action: Some(AgentAction {
+                                action_type: "log_supplement".into(),
+                                payload: serde_json::json!({
+                                    "name": protocol.name,
+                                    "dosage": protocol.dosage,
+                                    "category": protocol.category
+                                }),
+                            }),
+                        });
                     }
-                ),
+                }
+            }
+
+            // Generic voice acknowledgment
+            let msg = AgentMessage {
+                text: format!("Entendido: \"{}\". A processar.", input),
                 category: "voice_response".into(),
-                priority: "high".into(),
+                priority: "medium".into(),
                 action: None,
-            });
-        } else if lower.contains("tomei") || lower.contains("registar") || lower.contains("suplemento") {
-            // Try to match a protocol
-            for protocol in PROTOCOLS {
-                if lower.contains(&protocol.name.to_lowercase()) {
-                    return Ok(AgentMessage {
-                        text: format!("Registando {} — {}.", protocol.name, protocol.dosage),
-                        category: "voice_response".into(),
-                        priority: "high".into(),
+            };
+            return Ok(msg);
+        }
+
+        // 1. Check for pending supplements in current time window
+        let mut early: Option<AgentMessage> = None;
+        for protocol in PROTOCOLS {
+            if protocol.hours.contains(&hour) {
+                let took = db.check_supplement_taken(protocol.name, &today).unwrap_or(false);
+                if !took {
+                    early = Some(AgentMessage {
+                        text: format!(
+                            "{} — {}. {}",
+                            protocol.name, protocol.dosage, protocol.benefit
+                        ),
+                        category: "supplement_reminder".into(),
+                        priority: "medium".into(),
                         action: Some(AgentAction {
                             action_type: "log_supplement".into(),
                             payload: serde_json::json!({
@@ -122,70 +160,42 @@ pub async fn get_agent_message(
                             }),
                         }),
                     });
+                    break;
                 }
             }
         }
 
-        // Generic voice acknowledgment
-        return Ok(AgentMessage {
-            text: format!("Entendido: \"{}\". A processar.", input),
-            category: "voice_response".into(),
-            priority: "medium".into(),
-            action: None,
-        });
+        // 2. Count today's adherence
+        let taken_today = PROTOCOLS.iter()
+            .filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false))
+            .count();
+        let total = PROTOCOLS.len();
+        let adherence_pct = (taken_today as f64 / total as f64 * 100.0) as u32;
+
+        // 3. Build context for Gemini
+        let supplement_names: Vec<&str> = PROTOCOLS.iter().map(|p| p.name).collect();
+        let taken_names: Vec<&str> = PROTOCOLS.iter()
+            .filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false))
+            .map(|p| p.name)
+            .collect();
+        let pending_names: Vec<&str> = PROTOCOLS.iter()
+            .filter(|p| !db.check_supplement_taken(p.name, &today).unwrap_or(false))
+            .map(|p| p.name)
+            .collect();
+
+        let exam_context = if !upcoming_exams.is_empty() {
+            format!("Próximo exame: {} em {}.", upcoming_exams[0].1, upcoming_exams[0].3)
+        } else {
+            "Sem exames próximos.".to_string()
+        };
+
+        (adherence_pct, taken_today, total, supplement_names, taken_names, pending_names, exam_context, early)
+    }; // db lock released here
+
+    // Return early supplement reminder if found
+    if let Some(msg) = early_return {
+        return Ok(msg);
     }
-
-    // 1. Check for pending supplements in current time window
-    for protocol in PROTOCOLS {
-        if protocol.hours.contains(&hour) {
-            let took = db.check_supplement_taken(protocol.name, &today).unwrap_or(false);
-            if !took {
-                return Ok(AgentMessage {
-                    text: format!(
-                        "{} — {}. {}",
-                        protocol.name, protocol.dosage, protocol.benefit
-                    ),
-                    category: "supplement_reminder".into(),
-                    priority: "medium".into(),
-                    action: Some(AgentAction {
-                        action_type: "log_supplement".into(),
-                        payload: serde_json::json!({
-                            "name": protocol.name,
-                            "dosage": protocol.dosage,
-                            "category": protocol.category
-                        }),
-                    }),
-                });
-            }
-        }
-    }
-
-    // 2. Count today's adherence
-    let taken_today = PROTOCOLS.iter()
-        .filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false))
-        .count();
-    let total = PROTOCOLS.len();
-    let adherence_pct = (taken_today as f64 / total as f64 * 100.0) as u32;
-
-    // 3. Build context for Gemini (or fallback to hardcoded)
-    let supplement_names: Vec<&str> = PROTOCOLS.iter().map(|p| p.name).collect();
-    let taken_names: Vec<&str> = PROTOCOLS.iter()
-        .filter(|p| db.check_supplement_taken(p.name, &today).unwrap_or(false))
-        .map(|p| p.name)
-        .collect();
-    let pending_names: Vec<&str> = PROTOCOLS.iter()
-        .filter(|p| !db.check_supplement_taken(p.name, &today).unwrap_or(false))
-        .map(|p| p.name)
-        .collect();
-
-    let exam_context = if !upcoming_exams.is_empty() {
-        format!("Próximo exame: {} em {}.", upcoming_exams[0].1, upcoming_exams[0].3)
-    } else {
-        "Sem exames próximos.".to_string()
-    };
-
-    // Drop the db lock before the async Gemini call
-    drop(db);
 
     // Try Gemini for intelligent response, fallback to templates
     let gemini_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
@@ -294,8 +304,8 @@ async fn call_gemini_agent(
          Se tudo está em dia, encoraja. Se há pendentes, lembra com calma. \
          Se é noite, sugere desacelerar. Nunca alarmar.",
         hour, time_period, adherence_pct,
-        if taken.is_empty() { "nenhum" } else { &taken.join(", ") },
-        if pending.is_empty() { "nenhum" } else { &pending.join(", ") },
+        if taken.is_empty() { "nenhum".to_string() } else { taken.join(", ") },
+        if pending.is_empty() { "nenhum".to_string() } else { pending.join(", ") },
         all_supplements.join(", "),
         exam_context,
     );
