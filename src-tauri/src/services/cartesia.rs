@@ -39,7 +39,7 @@ impl Default for CartesiaConfig {
             api_key: String::new(),
             // Default: calm, warm male voice (can be changed in settings)
             voice_id: "a0e99841-438c-4a64-b679-ae501e7d6091".to_string(),
-            model_id: "sonic-2".to_string(),
+            model_id: "sonic-3".to_string(),
         }
     }
 }
