@@ -43,10 +43,8 @@ pub async fn process_voice_input(
     audio_path: String,
     language: Option<String>,
 ) -> Result<String, String> {
-    let lang = language.as_deref();
-
     tokio::task::spawn_blocking(move || {
-        whisper::transcribe(&audio_path, lang)
+        whisper::transcribe(&audio_path, language.as_deref())
             .map_err(|e| e.to_string())
     })
     .await
