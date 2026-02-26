@@ -232,13 +232,6 @@ export function BlinkRateWidget() {
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 9,
-  textTransform: "uppercase",
-  letterSpacing: "0.12em",
-  color: "rgba(255, 255, 255, 0.4)",
-};
-
 const unitStyle: React.CSSProperties = {
   fontSize: 10,
   color: "rgba(255, 255, 255, 0.4)",

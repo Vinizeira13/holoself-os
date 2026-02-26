@@ -228,10 +228,4 @@ pub async fn execute_agent_action(
     }
 }
 
-/// Process voice input via Whisper.cpp (placeholder)
-#[tauri::command]
-pub async fn process_voice_input(
-    _audio_path: String,
-) -> Result<String, String> {
-    Err("Voice input not yet implemented — Whisper.cpp integration pending".into())
-}
+// Voice input moved to commands::voice (Whisper.cpp integration)

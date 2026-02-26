@@ -43,12 +43,13 @@ pub fn run() {
             // Agent commands
             commands::agent::get_agent_message,
             commands::agent::execute_agent_action,
-            commands::agent::process_voice_input,
             // Gemini Bridge
             commands::gemini::ocr_clinical_pdf,
-            // Voice (Cartesia TTS)
+            // Voice (Cartesia TTS + Whisper STT)
             commands::voice::speak,
             commands::voice::speak_agent_message,
+            commands::voice::process_voice_input,
+            commands::voice::get_whisper_status,
             // Health Scheduler
             commands::scheduler::get_exam_schedule,
             commands::scheduler::save_scheduled_exam,

@@ -5,19 +5,24 @@ interface AgentState {
   message: AgentMessage | null;
   isLoading: boolean;
   error: string | null;
+  autoSpeak: boolean;
+  lastSpokenText: string | null;
   fetchMessage: () => Promise<void>;
   clearMessage: () => void;
+  setAutoSpeak: (v: boolean) => void;
+  speakCurrent: () => Promise<void>;
 }
 
-export const useAgentStore = create<AgentState>((set) => ({
+export const useAgentStore = create<AgentState>((set, get) => ({
   message: null,
   isLoading: false,
   error: null,
+  autoSpeak: true,
+  lastSpokenText: null,
 
   fetchMessage: async () => {
     set({ isLoading: true, error: null });
     try {
-      // In development without Tauri, use mock data
       if (typeof window.__TAURI__ === "undefined") {
         const hour = new Date().getHours();
         const mockMessage = getMockMessage(hour);
@@ -27,7 +32,13 @@ export const useAgentStore = create<AgentState>((set) => ({
 
       const { invoke } = await import("@tauri-apps/api/core");
       const message = await invoke<AgentMessage>("get_agent_message");
+      const prev = get().lastSpokenText;
       set({ message, isLoading: false });
+
+      // Auto-speak if enabled and message is new
+      if (get().autoSpeak && message.text !== prev) {
+        get().speakCurrent();
+      }
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : String(err),
@@ -37,6 +48,29 @@ export const useAgentStore = create<AgentState>((set) => ({
   },
 
   clearMessage: () => set({ message: null }),
+
+  setAutoSpeak: (v) => set({ autoSpeak: v }),
+
+  speakCurrent: async () => {
+    const msg = get().message;
+    if (!msg) return;
+    try {
+      if (typeof window.__TAURI__ !== "undefined") {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const audioBytes = await invoke<number[]>("speak_agent_message");
+        const audioCtx = new AudioContext();
+        const buffer = new Uint8Array(audioBytes).buffer;
+        const audioBuffer = await audioCtx.decodeAudioData(buffer);
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.start();
+        set({ lastSpokenText: msg.text });
+      }
+    } catch {
+      // TTS error — silent fail, non-critical
+    }
+  },
 }));
 
 // Mock messages for browser development (without Tauri runtime)

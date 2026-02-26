@@ -1,8 +1,9 @@
 use tauri::State;
 use crate::db::DbState;
 use crate::services::cartesia::{self, CartesiaConfig};
+use crate::services::whisper;
 
-/// Speak text through Cartesia TTS and return audio file path
+/// Speak text through Cartesia TTS and return audio bytes
 #[tauri::command]
 pub async fn speak(
     text: String,
@@ -23,7 +24,6 @@ pub async fn speak(
 pub async fn speak_agent_message(
     state: State<'_, DbState>,
 ) -> Result<Vec<u8>, String> {
-    // Get current agent message
     let message = super::agent::get_agent_message(state).await?;
 
     let api_key = std::env::var("CARTESIA_API_KEY")
@@ -35,4 +35,26 @@ pub async fn speak_agent_message(
     };
 
     cartesia::synthesize(&message.text, &config).await
+}
+
+/// Transcribe audio file using Whisper.cpp
+#[tauri::command]
+pub async fn process_voice_input(
+    audio_path: String,
+    language: Option<String>,
+) -> Result<String, String> {
+    let lang = language.as_deref();
+
+    tokio::task::spawn_blocking(move || {
+        whisper::transcribe(&audio_path, lang)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+/// Check whisper.cpp availability
+#[tauri::command]
+pub async fn get_whisper_status() -> Result<whisper::WhisperStatus, String> {
+    Ok(whisper::status())
 }

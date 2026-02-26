@@ -9,6 +9,7 @@ import { ToastContainer, useToastStore } from "./components/hud/Toast";
 import { VitaminDWidget } from "./components/health/VitaminDWidget";
 import { ScheduleWidget } from "./components/health/ScheduleWidget";
 import { BlinkRateWidget } from "./components/health/BlinkRateWidget";
+import { WpmWidget } from "./components/health/WpmWidget";
 import { IconSettings, IconVolume, IconEye, IconEyeOff } from "./components/hud/Icons";
 import { JarvisHud } from "./components/hud/JarvisHud";
 import { useAgentStore } from "./stores/agentStore";
@@ -19,6 +20,9 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showWidgets, setShowWidgets] = useState(true);
   const fetchAgentMessage = useAgentStore((s) => s.fetchMessage);
+  const speakCurrent = useAgentStore((s) => s.speakCurrent);
+  const autoSpeak = useAgentStore((s) => s.autoSpeak);
+  const setAutoSpeak = useAgentStore((s) => s.setAutoSpeak);
   const toast = useToastStore((s) => s.add);
 
   // Detect Tauri env for transparent background
@@ -54,25 +58,15 @@ export default function App() {
     }
   }, [toast]);
 
-  const handleSpeak = useCallback(async () => {
-    try {
-      if (typeof window.__TAURI__ !== "undefined") {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const audioBytes = await invoke<number[]>("speak_agent_message");
-        const audioCtx = new AudioContext();
-        const buffer = new Uint8Array(audioBytes).buffer;
-        const audioBuffer = await audioCtx.decodeAudioData(buffer);
-        const source = audioCtx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioCtx.destination);
-        source.start();
-      } else {
-        toast("TTS disponível apenas no Tauri", "info");
-      }
-    } catch (err) {
-      toast(`Erro TTS: ${err instanceof Error ? err.message : String(err)}`, "error");
-    }
-  }, [toast]);
+  const handleSpeak = useCallback(() => {
+    speakCurrent();
+  }, [speakCurrent]);
+
+  const toggleAutoSpeak = useCallback(() => {
+    const next = !autoSpeak;
+    setAutoSpeak(next);
+    toast(next ? "TTS automático ativado" : "TTS automático desativado", "info");
+  }, [autoSpeak, setAutoSpeak, toast]);
 
   return (
     <div
@@ -124,6 +118,14 @@ export default function App() {
             <button className="holo-icon-btn" onClick={handleSpeak} aria-label="Falar mensagem">
               <IconVolume />
             </button>
+            <button
+              className="holo-icon-btn"
+              onClick={toggleAutoSpeak}
+              aria-label={autoSpeak ? "Desativar TTS auto" : "Ativar TTS auto"}
+              style={{ opacity: autoSpeak ? 1 : 0.4 }}
+            >
+              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", letterSpacing: 1 }}>AUTO</span>
+            </button>
             <button className="holo-icon-btn" onClick={() => setShowSettings(true)} aria-label="Configurações">
               <IconSettings />
             </button>
@@ -138,6 +140,9 @@ export default function App() {
             </div>
             <div className="slide-in-left stagger-2">
               <BlinkRateWidget />
+            </div>
+            <div className="slide-in-left stagger-3">
+              <WpmWidget />
             </div>
           </div>
         )}
