@@ -16,6 +16,23 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
+            // Load .env from app config dir (saved by onboarding)
+            if let Ok(config_dir) = app.path().app_config_dir() {
+                let env_path = config_dir.join(".env");
+                if env_path.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&env_path) {
+                        for line in content.lines() {
+                            let line = line.trim();
+                            if line.is_empty() || line.starts_with('#') { continue; }
+                            if let Some((key, value)) = line.split_once('=') {
+                                std::env::set_var(key.trim(), value.trim());
+                            }
+                        }
+                        log::info!("Loaded env from {:?}", env_path);
+                    }
+                }
+            }
+
             // Initialize SQLite database
             let app_data = app.path().app_data_dir().expect("Failed to get app data dir");
             std::fs::create_dir_all(&app_data).expect("Failed to create app data dir");
@@ -66,6 +83,10 @@ pub fn run() {
             commands::settings::save_settings,
             // System
             commands::system::get_system_status,
+            // Setup / Onboarding
+            commands::setup::check_setup_status,
+            commands::setup::save_api_keys,
+            commands::setup::install_whisper_auto,
         ])
         .run(tauri::generate_context!())
         .expect("Error running HoloSelf OS");

@@ -18,11 +18,13 @@ import { usePresenceDetector } from "./hooks/usePresenceDetector";
 import { usePostureMonitor } from "./hooks/usePostureMonitor";
 import { useHealthContext, type ProactiveAlert } from "./hooks/useHealthContext";
 import { useDailySummary } from "./hooks/useDailySummary";
+import { SetupWizard } from "./components/setup/SetupWizard";
 import type { OcrResult } from "./types/health";
 
 export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [setupDone, setSetupDone] = useState<boolean | null>(null); // null = loading
   const [showWidgets, setShowWidgets] = useState(true);
   const fetchAgentMessage = useAgentStore((s) => s.fetchMessage);
   const speakCurrent = useAgentStore((s) => s.speakCurrent);
@@ -31,6 +33,33 @@ export default function App() {
   const toast = useToastStore((s) => s.add);
   const focusStartRef = useRef(Date.now());
   const breakCountRef = useRef(0);
+
+  // === SETUP CHECK (onboarding) ===
+  useEffect(() => {
+    (async () => {
+      // Check if setup was completed before (stored in localStorage)
+      const done = localStorage.getItem("holoself_setup_done");
+      if (done === "true") {
+        setSetupDone(true);
+        return;
+      }
+
+      // Check if at least Gemini key is configured (minimal requirement)
+      if (typeof window.__TAURI__ !== "undefined") {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const status = await invoke<{ gemini_key: boolean }>("check_setup_status");
+          if (status.gemini_key) {
+            setSetupDone(true);
+            localStorage.setItem("holoself_setup_done", "true");
+            return;
+          }
+        } catch { /* continue to wizard */ }
+      }
+
+      setSetupDone(false);
+    })();
+  }, []);
 
   // === PRESENCE DETECTION (Feature 2) ===
   const presence = usePresenceDetector({
@@ -135,6 +164,30 @@ export default function App() {
     setAutoSpeak(next);
     toast(next ? "TTS automático ativado" : "TTS automático desativado", "info");
   }, [autoSpeak, setAutoSpeak, toast]);
+
+  // Show setup wizard if not configured
+  if (setupDone === null) {
+    return (
+      <div style={{
+        width: "100%", height: "100%", display: "flex",
+        alignItems: "center", justifyContent: "center",
+        background: "radial-gradient(ellipse at center, #0a0e14 0%, #000508 100%)",
+        color: "var(--holo-primary)", fontFamily: "var(--font-mono)",
+        fontSize: 12, letterSpacing: 2,
+      }}>
+        HOLOSELF OS
+      </div>
+    );
+  }
+
+  if (!setupDone) {
+    return (
+      <SetupWizard onComplete={() => {
+        localStorage.setItem("holoself_setup_done", "true");
+        setSetupDone(true);
+      }} />
+    );
+  }
 
   return (
     <div
