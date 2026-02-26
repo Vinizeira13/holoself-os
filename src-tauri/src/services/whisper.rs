@@ -26,10 +26,11 @@ fn find_whisper_binary() -> Result<PathBuf> {
         }
     }
 
-    // 2. Check common locations
+    // 2. Check common locations (including cmake build output)
     let home = dirs::home_dir().unwrap_or_default();
     let search_dirs = vec![
-        home.join("whisper.cpp"),
+        home.join("whisper.cpp/build/bin"), // cmake build output (current)
+        home.join("whisper.cpp"),            // legacy Makefile build
         home.join(".local/bin"),
         PathBuf::from("/usr/local/bin"),
         PathBuf::from("/opt/homebrew/bin"),
@@ -77,6 +78,8 @@ fn find_model() -> Result<PathBuf> {
     // 2. Check common locations
     let home = dirs::home_dir().unwrap_or_default();
     let model_names = &[
+        "ggml-large-v3-turbo.bin",  // Best for PT-BR (~5% WER)
+        "ggml-large-v3-turbo-q5_0.bin",
         "ggml-base.bin",
         "ggml-small.bin",
         "ggml-tiny.bin",

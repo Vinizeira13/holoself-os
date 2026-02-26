@@ -84,6 +84,9 @@ pub async fn install_whisper_auto() -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Cannot find home directory")?;
     let whisper_dir = home.join("whisper.cpp");
 
+    // Step 0: Ensure cmake is available (required by whisper.cpp build system)
+    ensure_cmake_installed()?;
+
     // Step 1: Clone if not exists
     if !whisper_dir.exists() {
         let output = Command::new("git")
@@ -100,16 +103,35 @@ pub async fn install_whisper_auto() -> Result<String, String> {
         }
     }
 
-    // Step 2: Compile
-    let make_output = Command::new("make")
-        .current_dir(&whisper_dir)
-        .output()
-        .map_err(|e| format!("make failed: {}", e))?;
+    // Step 2: Compile using cmake (whisper.cpp's current build system)
+    let build_dir = whisper_dir.join("build");
+    std::fs::create_dir_all(&build_dir).map_err(|e| format!("Cannot create build dir: {}", e))?;
 
-    if !make_output.status.success() {
+    // Configure with cmake
+    let cmake_config = Command::new("cmake")
+        .args(["..", "-DCMAKE_BUILD_TYPE=Release"])
+        .current_dir(&build_dir)
+        .output()
+        .map_err(|e| format!("cmake configure failed: {}", e))?;
+
+    if !cmake_config.status.success() {
+        return Err(format!(
+            "cmake configure failed: {}",
+            String::from_utf8_lossy(&cmake_config.stderr).chars().take(500).collect::<String>()
+        ));
+    }
+
+    // Build
+    let cmake_build = Command::new("cmake")
+        .args(["--build", ".", "--config", "Release", "-j"])
+        .current_dir(&build_dir)
+        .output()
+        .map_err(|e| format!("cmake build failed: {}", e))?;
+
+    if !cmake_build.status.success() {
         return Err(format!(
             "Compilation failed: {}",
-            String::from_utf8_lossy(&make_output.stderr).chars().take(500).collect::<String>()
+            String::from_utf8_lossy(&cmake_build.stderr).chars().take(500).collect::<String>()
         ));
     }
 
@@ -222,11 +244,61 @@ fn find_whisper_binary() -> Option<PathBuf> {
 }
 
 fn find_whisper_binary_in(dir: &PathBuf) -> Option<PathBuf> {
+    // Check cmake build output first (build/bin/whisper-cli)
+    let cmake_bins = [
+        dir.join("build/bin/whisper-cli"),
+        dir.join("build/bin/main"),
+    ];
+    for bin in &cmake_bins {
+        if bin.exists() { return Some(bin.clone()); }
+    }
+
+    // Legacy: root-level binaries (old Makefile build)
     for name in &["whisper-cli", "main"] {
         let bin = dir.join(name);
         if bin.exists() { return Some(bin); }
     }
     None
+}
+
+/// Ensure cmake is installed, installing via Homebrew if needed (macOS)
+fn ensure_cmake_installed() -> Result<(), String> {
+    // Check if cmake already available
+    if let Ok(output) = Command::new("cmake").arg("--version").output() {
+        if output.status.success() {
+            return Ok(());
+        }
+    }
+
+    // Try installing via Homebrew (macOS)
+    log::info!("cmake not found, attempting install via Homebrew...");
+
+    // Check if brew is available
+    let brew_check = Command::new("which").arg("brew").output();
+    if brew_check.is_err() || !brew_check.unwrap().status.success() {
+        return Err(
+            "cmake não encontrado e Homebrew não está instalado.\n\
+             Instale manualmente:\n\
+             1. Instalar Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n\
+             2. brew install cmake\n\
+             3. Tente novamente".to_string()
+        );
+    }
+
+    let install = Command::new("brew")
+        .args(["install", "cmake"])
+        .output()
+        .map_err(|e| format!("brew install cmake failed: {}", e))?;
+
+    if !install.status.success() {
+        return Err(format!(
+            "brew install cmake falhou: {}",
+            String::from_utf8_lossy(&install.stderr).chars().take(300).collect::<String>()
+        ));
+    }
+
+    log::info!("cmake installed successfully via Homebrew");
+    Ok(())
 }
 
 fn find_whisper_model() -> Option<PathBuf> {
