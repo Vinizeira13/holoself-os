@@ -96,3 +96,104 @@ html, body, #root {
 .fade-in {
   animation: fade-in 0.4s ease-out forwards;
 }
+
+/* Fade out */
+@keyframes fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+.fade-out {
+  animation: fade-out 0.3s ease-in forwards;
+}
+
+/* Skeleton shimmer for loading states */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Slide up entrance */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+  animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scale in (for modals/panels) */
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Focus states — accessibility */
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(120, 200, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Interactive button base */
+.holo-btn {
+  padding: 8px 16px;
+  background: rgba(120, 200, 255, 0.08);
+  border: 1px solid rgba(120, 200, 255, 0.2);
+  border-radius: 8px;
+  color: rgba(120, 200, 255, 0.85);
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.holo-btn:hover {
+  background: rgba(120, 200, 255, 0.15);
+  border-color: rgba(120, 200, 255, 0.35);
+  box-shadow: 0 0 12px rgba(120, 200, 255, 0.1);
+}
+
+.holo-btn:active {
+  transform: scale(0.97);
+}
+
+/* Icon button */
+.holo-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(120, 200, 255, 0.12);
+  color: rgba(120, 200, 255, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+  padding: 0;
+}
+
+.holo-icon-btn:hover {
+  background: rgba(120, 200, 255, 0.1);
+  border-color: rgba(120, 200, 255, 0.3);
+  color: rgba(120, 200, 255, 0.9);
+}
+
+.holo-icon-btn:active {
+  transform: scale(0.93);
+}
+
+/* Smooth scrolling for widget areas */
+.scroll-area {
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+  scrollbar-width: thin;
+}

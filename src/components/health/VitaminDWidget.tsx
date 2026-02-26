@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LoadingSkeleton } from "../hud/LoadingSkeleton";
 
 interface VitDData {
   uv_index: number;
@@ -40,7 +41,12 @@ export function VitaminDWidget() {
     }
   };
 
-  if (!data) return null;
+  if (!data) return (
+    <div className="holo-card" style={{ padding: "12px 16px", marginBottom: 8 }}>
+      <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(255,255,255,0.4)" }}>Vitamina D</span>
+      <div style={{ marginTop: 8 }}><LoadingSkeleton count={2} height={16} /></div>
+    </div>
+  );
 
   const uvColor = data.uv_index < 3
     ? "rgba(180, 140, 255, 0.8)"

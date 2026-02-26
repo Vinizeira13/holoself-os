@@ -56,6 +56,9 @@ pub fn run() {
             // Vitamin D Calculator
             commands::vitamin_d::get_vitamin_d_recommendation,
             commands::vitamin_d::get_current_uv_index,
+            // Settings
+            commands::settings::get_settings,
+            commands::settings::save_settings,
             // System
             commands::system::get_system_status,
         ])

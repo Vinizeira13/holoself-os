@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useAgentStore } from "../../stores/agentStore";
+import { useToastStore } from "./Toast";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import type { AgentAction } from "../../types/health";
 
 /**
@@ -9,12 +11,25 @@ import type { AgentAction } from "../../types/health";
 export function AgentPanel() {
   const { message, isLoading } = useAgentStore();
   const [actionStatus, setActionStatus] = useState<string | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const toast = useToastStore((s) => s.add);
 
-  if (isLoading || !message) return null;
+  if (isLoading) {
+    return (
+      <div style={{ position: "absolute", bottom: 24, left: 16, right: 16, zIndex: 50 }}>
+        <div className="holo-card" style={{ padding: "14px 18px" }}>
+          <LoadingSkeleton count={2} height={14} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!message) return null;
 
   const categoryStyle = getCategoryStyle(message.category);
 
   const handleAction = async (action: AgentAction) => {
+    setExecuting(true);
     setActionStatus("A processar...");
     try {
       if (typeof window.__TAURI__ !== "undefined") {
@@ -24,21 +39,26 @@ export function AgentPanel() {
           payload: action.payload,
         });
         setActionStatus(result);
+        toast(result, "success");
       } else {
-        // Mock for browser dev
-        setActionStatus(`${(action.payload as Record<string, string>).name ?? "Item"} registado (dev mode)`);
+        const name = (action.payload as Record<string, string>).name ?? "Item";
+        setActionStatus(`${name} registado (dev mode)`);
+        toast(`${name} registado`, "success");
       }
-      // Clear after 3s
       setTimeout(() => setActionStatus(null), 3000);
     } catch (err) {
-      setActionStatus(`Erro: ${err instanceof Error ? err.message : String(err)}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setActionStatus(`Erro: ${errMsg}`);
+      toast(`Erro: ${errMsg}`, "error");
       setTimeout(() => setActionStatus(null), 5000);
+    } finally {
+      setExecuting(false);
     }
   };
 
   return (
     <div
-      className="fade-in"
+      className="slide-up"
       style={{
         position: "absolute",
         bottom: 24,
@@ -49,14 +69,7 @@ export function AgentPanel() {
     >
       <div className="holo-card" style={{ padding: "14px 18px" }}>
         {/* Category indicator */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <div
             style={{
               width: 5,
@@ -66,67 +79,34 @@ export function AgentPanel() {
               boxShadow: `0 0 6px ${categoryStyle.color}`,
             }}
           />
-          <span
-            style={{
-              fontSize: 9,
-              textTransform: "uppercase",
-              letterSpacing: "0.12em",
-              color: "rgba(255, 255, 255, 0.4)",
-            }}
-          >
+          <span style={{
+            fontSize: 9,
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            color: "var(--holo-text-dim)",
+          }}>
             {categoryStyle.label}
           </span>
         </div>
 
         {/* Agent message */}
-        <p
-          style={{
-            fontSize: 13,
-            lineHeight: 1.6,
-            color: "rgba(255, 255, 255, 0.85)",
-            fontWeight: 400,
-          }}
-        >
+        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--holo-text)", fontWeight: 400 }}>
           {message.text}
         </p>
 
         {/* Action button or status */}
         {actionStatus ? (
-          <p
-            style={{
-              marginTop: 10,
-              fontSize: 11,
-              color: "rgba(100, 255, 180, 0.8)",
-            }}
-          >
+          <p style={{ marginTop: 10, fontSize: 11, color: "var(--holo-accent)" }}>
             {actionStatus}
           </p>
         ) : message.action ? (
           <button
+            className="holo-btn"
             onClick={() => handleAction(message.action!)}
-            style={{
-              marginTop: 12,
-              padding: "8px 16px",
-              background: "rgba(120, 200, 255, 0.1)",
-              border: "1px solid rgba(120, 200, 255, 0.25)",
-              borderRadius: 8,
-              color: "rgba(120, 200, 255, 0.9)",
-              fontSize: 11,
-              cursor: "pointer",
-              letterSpacing: "0.05em",
-              transition: "all 0.2s ease",
-              pointerEvents: "auto",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(120, 200, 255, 0.18)";
-              e.currentTarget.style.borderColor = "rgba(120, 200, 255, 0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(120, 200, 255, 0.1)";
-              e.currentTarget.style.borderColor = "rgba(120, 200, 255, 0.25)";
-            }}
+            disabled={executing}
+            style={{ marginTop: 12, opacity: executing ? 0.5 : 1 }}
           >
-            Confirmar
+            {executing ? "A processar..." : "Confirmar"}
           </button>
         ) : null}
       </div>
@@ -137,14 +117,14 @@ export function AgentPanel() {
 function getCategoryStyle(category: string) {
   switch (category) {
     case "supplement_reminder":
-      return { label: "Suplementação", color: "rgba(100, 255, 180, 0.8)" };
+      return { label: "Suplementação", color: "var(--holo-accent)" };
     case "health_insight":
-      return { label: "Insight", color: "rgba(120, 200, 255, 0.8)" };
+      return { label: "Insight", color: "var(--holo-primary)" };
     case "calm_nudge":
-      return { label: "Bem-estar", color: "rgba(180, 140, 255, 0.7)" };
+      return { label: "Bem-estar", color: "var(--holo-secondary)" };
     case "schedule":
       return { label: "Agenda", color: "rgba(255, 200, 100, 0.7)" };
     default:
-      return { label: "Sistema", color: "rgba(255, 255, 255, 0.5)" };
+      return { label: "Sistema", color: "var(--holo-text-dim)" };
   }
 }
